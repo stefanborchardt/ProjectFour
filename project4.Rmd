@@ -425,8 +425,16 @@ I have to consider that these are the cases that were reported to the Robert Koc
 I tried to find additional data sources about incidences of gastroenteritis from a health insurance. It contains the cases diagnosed as non-infectious gastroenteritis which caused sick leaves in the year 2005. That is the only year where data for memberships is available, so that I can approximate the incidence for the total population:
 
 ```{r echo=FALSE, fig.width=10, fig.height=5, Univariate_Plots10}
-# data for gastroenteritis of one health insurance (AOK)  of 2005, the only available
-aok_inc <- 6224.3
+# data for gastroenteritis of one health insurance (AOK) for the years 2002-2008
+aok_inc <- read.csv2("IND683_1.csv")
+colnames(aok_inc)[2: ncol(aok_inc)] <- gsub(pattern = "X\\.", replacement = "",
+                                   x = colnames(aok_inc)[2: ncol(aok_inc)])
+aok_inc <- as.data.frame(t(aok_inc), stringsAsFactors = F)
+colnames(aok_inc) <- aok_inc[1, ]
+aok_inc$year <- rownames(aok_inc)
+aok_inc <- aok_inc[-1, ]
+
+aok_inc <- as.data.frame(t(aok_inc))
 
 # extract yearly disease time series only
 w1 <- window.gts(gtsinc, deltat=1)
@@ -434,12 +442,15 @@ w1ts <- aggts(w1, levels=c(0))
 # fix disease names (a little)
 # actually better than plotting colored lines as a time series plot would do
 plot(w1ts, type="l", main="Incidences", ylim = c(0, 7000))
-points(x = 2005, y = aok_inc, type="b", pch=19, col="blue")
-legend("topright", c("AOK / sick leaves non-infect. gastroent.","RKI / infectious gastroenteritis only"), fill=c("blue", "black") )  
+points(x = aok_inc$year, y = aok_inc[ , 7], type="b", pch=19, col="blue")
+points(x = aok_inc$year, y = aok_inc[ , 6], type="b", pch=19, col="green")
+legend("topright", c("AOK / sick leaves non-infect. gastroent.", 
+                     "AOK / sick leaves infectious gastroent.",
+                     "RKI / infectious gastroenteritis only"), fill=c("blue", "green", "black") )  
 
 ```
 
-With the help of a doctor I found out that at least 80% of the cases have an infectious cause, which means I should see a yearly incidence of at least 30,000 in the RKI's data. The plotted values are much lower. I checked this against the yearly values through the institute's interface and noticed even much lower values (240-560) there. 
+With the help of a doctor I found out that at least 80% of the cases have an infectious cause, which means I should see a yearly incidence of well above 10,000 in the RKI's data. The plotted values are much lower. I checked this against the yearly values through the institute's interface and noticed even much lower values (240-560) there. 
 
 I think the reason for the different values is that some incidences are summed up when actually a mean should be calculated. For instance, an incidence of 4 in Region East and 6 in Region North does not mean a combined incidence of 10, but of 5. On the other hand, incidences for diseases and ages should be added. 
 
@@ -468,70 +479,259 @@ I temporarily created a variable for age with factor levels of equal width.
 
 As before, I had to combine several files into one. This time though, I shortened the names of factor levels to a fixed length to make use of the automatic grouping of the hts library.
 
-# Bivariate Plots Section
+# Univariate Plots Section
+## Iteration 3
 
-First, I revisit the disease distribution by age, only this time incidences are not counted but summed up. I experiment on how to indicate the different bin widths
+```{r eval = FALSE, echo=FALSE, message=FALSE, Load_the_Data3}
+# Load the Data
+####################################################################################
+#########  switch to eval = TRUE if you want to read 'raw' files again #############
+#########  otherwise see next chunk                                    #############
+####################################################################################
 
-```{r echo=FALSE, fig.width=10, fig.height=5, warning=FALSE, Bivariate_Plots}
-# group and sum
-sum_inc_by_age_and_dis <- summarize(group_by(long_inc, age, disease), sum_inc = sum(incidence))
-# add the widths of the age groups
-sum_inc_by_age_and_dis$wdth <- c(rep(rep(1, 9), 6), rep(rep(5, 9), 4), rep(rep(10, 9), 6))
+#getwd()
+#setwd("R Scripts/p4")
 
-ggplot(sum_inc_by_age_and_dis, aes(
-  x = age, y = sum_inc, fill = disease, width = wdth / 12)) +
-  geom_bar(stat = "identity", position = "identity", colour = "black") +
-  guides(fill = guide_legend(reverse = TRUE)) 
+# read population data
+population <- read.csv2("population.csv")
 
-sum_inc_by_age_and_dis$wdth <- NULL
+# get sums by region only
+population <- mutate(population, n = Bremen + Hamburg + Mecklenburg.Vorpommern + Niedersachsen +
+                       Schleswig.Holstein)
+population <- mutate(population, e = Berlin + Brandenburg + Sachsen + Sachsen.Anhalt + Thüringen)
+population <- mutate(population, s = Baden.Württemberg + Bayern)
+population <- mutate(population, w = Hessen + Nordrhein.Westfalen + Rheinland.Pfalz + Saarland)
+
+# only need the year, using population of 31/12/2000 for the years 2000 and 2001
+population$year <- as.integer(substr(as.character(population$date), 7, 10)) 
+# only keep relevant columns
+population <- select(population, year, age, n, e , s, w)
+
+population$age <- as.character(population$age)
+# remove sum rows
+population <- population[ - which(population$age == "Insgesamt"), ]
+# prepare conversion to int
+population$age <- gsub(pattern="\\-.*", replacement="", x=population$age)
+population$age <- gsub(pattern=" Jahre und mehr", replacement="", x=population$age)
+population$age <- gsub(pattern="unter 1 Jahr", replacement="0", x=population$age)
+population$age <- as.integer(population$age)
+# disease data only has the sum for people 80+, sum
+to_sum <- population[which(population$age >= 80), ]
+summed <- summarize_each(group_by(to_sum, year), funs(sum), n, e , s, w)
+summed$age <- 80
+# replace
+population <- population[ - which(population$age >= 80), ]
+population <- bind_rows(population, summed)
+population <- arrange(population, year)
+remove(summed, to_sum)
+
+#melt regions
+population <- gather(population, region, pop_count, n:w)
+# avoid int overflows when summing
+population$pop_count <- as.numeric(population$pop_count)
+pop_levels <- levels(population$region)
+
+# ------------------
+# functions for reading case number files
+
+read_bind <- function (region, disease, to_bind) {
+  # Reads one csv file and bind it to data from other file
+  # Args: 
+  #   region, disease - for filename and path
+  #   to_bind - optional, data.frame from previous file
+  # Returns:
+  #   read (and bound) data frame    
+
+  # read tab-delimited CSV containing nuls
+  filename <- paste(paste(paste("i3", region,  sep="\\"), disease, sep="\\"), "csv", sep=".")
+#  filename <-"i3\\e\\camp.csv"
+  rd <- read.delim2(filename, skipNul = T, skip = 1)
+  
+  rd$disease <- disease
+  
+  # handle date
+  colnames(rd)[1] <- "date"
+  year <- substr(rd$date, 1, 4)
+  # strptime ignores week number, approximate date by adding days from Jan 1st
+  year <- substr(rd$date, 1, 4)
+  jan <- as.Date(paste("01/01/", year, sep=""), "%m/%d/%Y")
+  # and keep week number for seasonal analysis
+  rd$week <- as.integer(substr(rd$date, 8, 9))
+  rd$date <- jan + (rd$week - 1) * 7
+  # we need a year to join with population data
+  year <- as.integer(year)
+  rd$pop_year <- ifelse(year %% 2 == 0, year, year - 1)
+  
+  # handle age, first drop "unknown" age column
+  rd <- subset(rd, select = - Unbekannt)
+  # reformat age column names
+  colnames(rd)[2:ncol(rd)] <- gsub(pattern="\\..*", replacement="",
+                                   x=colnames(rd)[2:ncol(rd)])
+  # melt age columns
+  td <- gather(rd, age, case_count, `A00`:`A80` )
+  # convert to int
+  td$age <- gsub(pattern="A", replacement="", x=td$age)
+  td$age <- as.integer(td$age)
+  
+  if (missing(to_bind)) {
+    return(td)
+  }
+  jd <- bind_rows(to_bind, td)
+  return(jd)
+}
+
+read_disease <- function (region) {
+  # Reads csv files for all diseases
+  # Args: 
+  #   region - for filepath
+  # Returns:
+  #   read data frame with diseases as columns 
+  
+  # handle files for the diseases
+  c <- read_bind(region, "camp")
+  ec <- read_bind(region, "ecol", c)
+  eh <- read_bind(region, "ehec", ec)
+  g <- read_bind(region, "giar", eh)
+  i <- read_bind(region, "infl", g)
+  n <- read_bind(region, "noro", i)
+  r <- read_bind(region, "rota", n)
+  s <- read_bind(region, "salm", r)
+  y <- read_bind(region, "yers", s)
+  
+  y$disease <- as.factor(y$disease)
+  return(y)
+}
+
+
+read_region <- function (region, to_bind) {
+  # Reads csv files for one region and bind to data of other region
+  # Args: 
+  #   region - for filepath
+  #   to_bind - optional, data.frame from previous region
+  # Returns:
+  #   read data frame (bound to previous region)
+  
+  rd <- read_disease(region)
+  # using the same levels as for the population data
+  rd$region <- factor(region, pop_levels)
+  
+  if (missing(to_bind)) {
+    return(rd)
+  }
+  return(bind_rows(to_bind, rd))
+}
+
+# ------------------
+# read the files and combine into one dataset
+rd_north <- read_region("n")
+rd_ne <- read_region("e", rd_north)
+rd_nes <- read_region("s", rd_ne)
+cases <- read_region("w", rd_nes)
+remove(rd_north, rd_ne, rd_nes)
+
+cases[is.na(cases)] <- 0.0
+# add population counts on composite key
+cases <- left_join(cases, population, 
+                        by = c("pop_year" = "year", "age" = "age", "region" = "region"))
+cases <- subset(cases, select = - pop_year)
+cases <- arrange(cases, date)
+
+# calculate incidence per 100,000 and round to .1
+cases$incidence <- round(cases$case_count * 100000 / cases$pop_count, digits = 1)
+
+write.csv(cases, file="cases.csv", row.names=F)
+
+# wide format necessary for the time series plot. 
+wide_inc <- dcast(cases, date ~ disease + age + region)
 
 ```
 
-Rather confusing. I try to convert the factor age group to a numeric value.
+```{r echo=FALSE, fig.width=10, fig.height=7, message=FALSE, warning=FALSE, Load_the_Data3}
+#getwd()
+#setwd("R Scripts/p4")
+####################################################################################
+#########  read data converted above                                   #############
+####################################################################################
+# load prepared data
+cases <- read.csv("cases.csv")
+cases$date <- as.Date(cases$date, "%Y-%m-%d")
+cases <- arrange(cases, date)
+
+wide_inc <- dcast(cases, date ~ disease + age + region)
+```
+
+# Univariate Analysis
+## Iteration 3
+### What is the structure of your dataset?
+
+To compute the incidences on my own, I downloaded the population data of the German states from https://www-genesis.destatis.de/genesis/online/link/tabellen/12411-0011 . There are limitations about the size of data you are allowed to obtain for free, so it is only biennial. Initially, the file contained 736 obs. of 18 variables, but I reduced it to 648 obs. of 6 variables by summing values for regions and ages 80+.
+
+The dataset contains 99,456 observations of 13 variables. For 777 weeks I have the incidence (as cases per 100,000) of nine not very rare infectious diseases, which are related to gastrointestinal symptoms, for patients grouped by age, gender and region of Germany. Again, the observations have been filled with zeros to help with time series analysis later on. A redundant column for the week of the year has been included. 
+The regions are North, East, South and West, all of which contain bigger cities and rural areas. Data with unclear gender was already omitted when downloading the data. The size of the dataset is approximately 6 MB. 
+
+### Did you create any new variables from existing variables in the dataset?
+
+I temporarily created a variable for age with factor levels of equal width.
+
+### Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? If so, why did you do this?
+
+As before, I had to combine several files into one. This time though, I shortened the names of factor levels to a fixed length to make use of the automatic grouping of the hts library.
+
+
+
+
+
+
+# Bivariate Plots Section
+
+First, I revisit the disease distribution by age, only this time incidences are not counted but summed up. 
 
 ```{r echo=FALSE, fig.width=10, fig.height=7, warning=FALSE, Bivariate_Plots2}
 
-#convert factor age group to numeric floor of age
-sum_inc_by_age_and_dis$age <- as.character(sum_inc_by_age_and_dis$age)
-sum_inc_by_age_and_dis$age <- gsub(pattern = "A", replacement = "",
-                                   x = sum_inc_by_age_and_dis$age)
-sum_inc_by_age_and_dis$age <- as.numeric(sum_inc_by_age_and_dis$age)
+to_group <- select(cases, date, disease, age, cases, region, pop_count)
 
-ggplot(sum_inc_by_age_and_dis, aes(x = age, y = sum_inc, fill = disease)) +
+cases <- cases %>% 
+  group_by(age, disease) %>% 
+  mutate(sum_cases = sum(cases)) %>%
+  group_by(age, disease) %>% 
+  mutate(sum_pop = sum(pop_count))
+cases$age_inc <- cases$sum_cases * 100000 / cases$sum_pop
+
+sum_by_age_and_dis <- summarize(group_by(cases, age, disease), sum_cases = sum(cases), sum_pop = sum(pop_count)/36)
+pop_by_age <- summarise(group_by(population, age))
+sum_by_age_and_dis$incidence <- round(sum_by_age_and_dis$cases * 100000 / sum_by_age_and_dis$pop_count)
+
+theme_set(theme_few())
+
+ggplot(sum_by_age_and_dis, aes(x = age, y = incidence, fill = disease)) +
   geom_area(stat = "identity", position = "stack", colour="black") +
   guides(fill = guide_legend(reverse = TRUE)) +
   scale_x_continuous(breaks=seq(0, 80, by=5)) 
 
-remove(sum_inc_by_age_and_dis)
 ```
 
-Converting the factor age group to a numeric value worked. I had not expected that the differences are that big. Again, I have to consider that the data contains reported cases, maybe adults just do not see a doctor when they have the syptoms. 
+I had not expected that the differences are that big. Again, I have to consider that the data contains reported cases, maybe adults just do not see a doctor when they have the syptoms. 
 
-Another aspect is that I assume that the incidence is calculated on the population total, and not by the population of the age group. I expect the differences to be even more extreme than what I see here.
+Let's focus on the smaller kids:
+
+```{r echo=FALSE, fig.width=10, fig.height=7, warning=FALSE, Bivariate_Plots2}
+
+ggplot(sum_by_age_and_dis, aes(x = age, y = incidence, fill = disease)) +
+  geom_area(stat = "identity", position = "stack", colour="black") +
+  guides(fill = guide_legend(reverse = TRUE)) +
+  scale_x_sqrt(breaks=round(seq(0.5, 9, length.out = 12)^2 - 1)[-1]) 
+
+remove(sum_inc_by_age_and_dis)
+
+```
+
+ 
+
+
 
 ```{r}
 
-population <- read.csv2("population.csv")
-str(population)
 
-# remove summary columns
-pop <- select(population, - ends_with("2"))
-
-# sum by gender and region
-pop <- mutate(pop, mal_n = Bremen + Hamburg + Mecklenburg.Vorpommern + 
-                                 Niedersachsen + Schleswig.Holstein)
-pop <- mutate(pop, fem_n = Bremen.1 + Hamburg.1 + Mecklenburg.Vorpommern.1 +
-                                 Niedersachsen.1 + Schleswig.Holstein.1)
-pop <- mutate(pop, mal_e = Berlin + Brandenburg + Sachsen + Sachsen.Anhalt +
-                                 Thüringen)
-pop <- mutate(pop, fem_e = Berlin.1 + Brandenburg.1 + Sachsen.1 + Sachsen.Anhalt.1 +
-                                 Thüringen.1)
-pop <- mutate(pop, mal_s = Baden.Württemberg + Bayern)
-pop <- mutate(pop, fem_s = Baden.Württemberg.1 + Bayern.1)
-pop <- mutate(pop, mal_w = Hessen + Nordrhein.Westfalen + Rheinland.Pfalz + Saarland)
-pop <- mutate(pop, fem_w = Hessen.1 + Nordrhein.Westfalen.1 + Rheinland.Pfalz.1 +
-                                 Saarland.1)
-pop <- select(pop, X, X.1, contains("_"))
 
 
 ```
