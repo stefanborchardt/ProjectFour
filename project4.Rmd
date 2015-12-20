@@ -362,19 +362,9 @@ pl <- function (inc) {
 grid.arrange(pl(0), pl(1), pl(10), pl(100))
 ```
 
-I got the impression that only 3-5 diseases reach high incidences, so I have a look at the variability:
+I got the impression that only 3-5 diseases reach high incidences, so I will have a look at the variability later in the bivariate section.
 
-```{r echo=FALSE, fig.width=10, fig.height=7, Univariate_Plots7a}
-
-# boxplot of diseases
-qplot(data=long_inc, x=disease, y=incidence,
-      geom="boxplot", fill=disease, main="Boxplot of Diseases, Zoomed In") + 
-  guides(fill=FALSE) +
-  coord_cartesian(ylim=c(0,8))
-
-```
-
-Influenza has a low mean but a lot of outliers. I remember seasonal patterns from the initial time series plot. So this time I group by week of the year:
+I remember seasonal patterns from the initial time series plot. So this time I group by week of the year:
 
 ```{r echo=FALSE, fig.width=10, fig.height=7, Univariate_Plots8}
 
@@ -612,64 +602,64 @@ cases <- arrange(cases, date)
 # read population data
 population <- read.csv2("population.csv")
 
-# sum by region 
-population <- mutate(population, n = Bremen + Hamburg + Mecklenburg.Vorpommern + Niedersachsen +
-                       Schleswig.Holstein)
-population <- mutate(population, e = Berlin + Brandenburg + Sachsen + Sachsen.Anhalt + Thüringen)
-population <- mutate(population, s = Baden.Württemberg + Bayern)
-population <- mutate(population, w = Hessen + Nordrhein.Westfalen + Rheinland.Pfalz + Saarland)
-
-# only need the year, using population of e.g. 31/12/2000 for the years 2000 and 2001
-population$year <- as.integer(substr(as.character(population$date), 7, 10)) 
-# only keep relevant columns
-population <- select(population, year, age, n, e , s, w)
-
-# handle age
-population$age <- as.character(population$age)
-# remove sum rows
-population <- population[ - which(population$age == "Insgesamt"), ]
-# prepare conversion to int
-population$age <- gsub(pattern="\\-.*", replacement="", x=population$age)
-population$age <- gsub(pattern=" Jahre und mehr", replacement="", x=population$age)
-population$age <- gsub(pattern="unter 1 Jahr", replacement="0", x=population$age)
-population$age <- as.integer(population$age)
+population <- population %>%
+  # sum by region 
+  mutate(n = Bremen + Hamburg + Mecklenburg.Vorpommern + Niedersachsen +
+                       Schleswig.Holstein) %>%
+  mutate(e = Berlin + Brandenburg + Sachsen + Sachsen.Anhalt + Thüringen) %>%
+  mutate(s = Baden.Württemberg + Bayern) %>%
+  mutate(w = Hessen + Nordrhein.Westfalen + Rheinland.Pfalz + Saarland) %>%
+  # only need the year, using population of e.g. 31/12/2000 for the years 2000 and 2001
+  mutate(year = as.integer(substr(as.character(population$date), 7, 10))) %>%
+  # only keep relevant columns
+  select(year, age, n, e , s, w) %>%
+  # handle age
+  mutate(age = as.character(age)) %>%
+  # remove sum rows
+  filter(age != "Insgesamt") %>%
+  # prepare conversion to int
+  mutate(age = gsub(pattern="\\-.*", replacement="", x=age)) %>%
+  mutate(age = gsub(pattern=" Jahre und mehr", replacement="", x=age)) %>%
+  mutate(age = gsub(pattern="unter 1 Jahr", replacement="0", x=age)) %>%
+  mutate(age = as.integer(age)) 
+         
 # disease data only has the sum for people 80+, sum
-to_sum <- population[which(population$age >= 80), ]
-summed <- summarize_each(group_by(to_sum, year), funs(sum), n, e , s, w)
-summed$age <- 80
-# replace
-population <- population[ - which(population$age >= 80), ]
-population <- bind_rows(population, summed)
-population <- arrange(population, year)
-remove(summed, to_sum)
+summed <- population %>%
+  filter(age >= 80) %>%
+  group_by(year) %>%
+  summarize_each(funs(sum), n, e , s, w) %>%
+  mutate(age = 80)
 
-# melt regions
-population <- gather(population, region, pop_count, n:w)
-# adjust factor levels to cases df
-population$region <- factor(population$region, pop_levels)
+population <- population %>%
+  # replace
+  filter(age < 80) %>%
+  bind_rows(summed) %>%
+  arrange(year) %>%
+  # melt regions
+  gather(region, pop_count, n:w) %>%
+  mutate(region = factor(region, pop_levels))
+  
+remove(summed)
+
 
 ```
 
 
 ```{r echo=FALSE, fig.width=10, fig.height=5, Univariate_Plots11}
 
-inc_by_year <- cases
-inc_by_year$date <- year(inc_by_year$date)
-# first sum over all weeks and diseases
-inc_by_year <- inc_by_year %>%
+inc_by_year <- cases %>%
+  mutate(date = year(date)) %>%
+  # first sum over all weeks and diseases
   group_by(date, pop_year, age, region) %>%
-  summarise(annual_dis_cases = sum(case_count))
-# second join with population data
-inc_by_year <- left_join(inc_by_year, population, 
-                        by = c("pop_year" = "year", "age" = "age", "region" = "region"))
-# third sum over ages and regions
-inc_by_year <- inc_by_year %>%
+  summarise(annual_dis_cases = sum(case_count)) %>%
+  # second join with population data
+  left_join(population, by = c("pop_year" = "year", "age" = "age", "region" = "region")) %>%
   select(- pop_year) %>%
+  # third sum over ages and regions
   group_by(date) %>%
-  summarise(annual_cases = sum(annual_dis_cases), annual_pop=sum(pop_count)) 
-# fourth calculate incidence per 100,000 and round to .1
-inc_by_year$incidence <- round(inc_by_year$annual_cases * 100000 / 
-                                 inc_by_year$annual_pop, digits = 1)
+  summarise(annual_cases = sum(annual_dis_cases), annual_pop=sum(pop_count)) %>%
+  # fourth calculate incidence
+  mutate(incidence = round(annual_cases * 100000 / annual_pop, digits = 1))
 
 plot(inc_by_year$date, inc_by_year$incidence, type="l", main="Incidences", ylim = c(0, 7000))
 points(x = aok_inc$year, y = aok_inc[ , 7], type="b", pch=19, col="blue")
@@ -678,33 +668,64 @@ legend("topright", c("AOK / sick leaves non-infect. gastroent.",
                      "AOK / sick leaves infectious gastroent.",
                      "RKI / infectious gastroenteritis only"), fill=c("blue", "green", "black") ) 
 
-
+remove(aok_inc)
+str(cases)
 ```
 
-That worked. The numbers match the values I got from the data source. In a perfect world, the green and black lines would be much higher than the blue line.
+The numbers now match the values I got from the data source. In a perfect world, the green and black lines would be much higher than the blue line.
+
+This also means that I have to check the values of other plots I consider for my final plots. Here is the update for the long-term trends of diseases:
+
+```{r echo=FALSE, fig.width=10, fig.height=7, Univariate_Plots11a}
+
+annual_pop <- population %>%
+  # population number over all ages
+  group_by(year) %>%
+  summarize(pop = sum(pop_count))
+
+inc_by_year_and_dis <- cases %>%
+  mutate(date = quarter(date, with_year = TRUE)) %>%
+  # first sum over all weeks, ages, regions
+  group_by(date, pop_year, disease) %>%
+  summarise(annual_cases = sum(case_count)) %>%
+  # second join with population data
+  left_join(annual_pop, by = c("pop_year" = "year")) %>%
+  # third calculate incidence
+  mutate(incidence = round(annual_cases * 100000 / pop, digits = 1)) %>%
+  ungroup() %>%
+  mutate(disease = as.character(disease))
+inc_by_year_and_dis <- select(inc_by_year_and_dis, date, disease, incidence)
+  
+# convert to grouped time series 
+wide_inc_by_year_and_dis <- dcast(inc_by_year_and_dis, date ~ disease)
+ts_by_year_and_dis <- ts(subset(wide_inc_by_year_and_dis, select=-date), 
+                           frequency = 4, 
+                           start = 2001)
+# only plot disease level, not total
+to_plot <- aggts(gts(ts_by_year_and_dis), levels=c(1))
+plot(to_plot, type="b", main="Quarterly Incidences")
+
+
+```
 
 
 # Univariate Analysis
 ## Iteration 3
 ### What is the structure of your dataset?
 
-To compute the incidences on my own, I downloaded the population data of the German states from https://www-genesis.destatis.de/genesis/online/link/tabellen/12411-0011 . There are limitations about the size of data you are allowed to obtain for free, so it is only biennial. Initially, the file contained 736 obs. of 18 variables, but I reduced it to 648 obs. of 6 variables by summing values for regions and ages 80+.
+The dataset consists of two parts. To compute the incidences on my own, I downloaded the population data of the German states from https://www-genesis.destatis.de/genesis/online/link/tabellen/12411-0011 . There are limitations about the size of data you can obtain for free, so it is only biennial. Initially, this first part of the data contained 736 obs. of 18 variables, but I reduced it to 648 obs. of 6 variables by summing values for regions and ages 80+.
 
-The dataset contains 99,456 observations of 13 variables. For 777 weeks I have the incidence (as cases per 100,000) of nine not very rare infectious diseases, which are related to gastrointestinal symptoms, for patients grouped by age, gender and region of Germany. Again, the observations have been filled with zeros to help with time series analysis later on. A redundant column for the week of the year has been included. 
-The regions are North, East, South and West, all of which contain bigger cities and rural areas. Data with unclear gender was already omitted when downloading the data. The size of the dataset is approximately 6 MB. 
+The second part contains 2,283,228 observations of 7 variables. For 777 weeks I have the case counts of nine not very rare infectious diseases, which are related to gastrointestinal symptoms, for patients grouped by age and region of Germany. Two redundant columns for the week of the year and the year to match with the population data have been included. The size of this dataset is approximately 80 MB. 
 
 ### Did you create any new variables from existing variables in the dataset?
 
-I temporarily created a variable for age with factor levels of equal width.
+The incidence was calculated, often per plot, to ensure the right case and population counts are matched against each other.
 
 ### Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? If so, why did you do this?
 
-As before, I had to combine several files into one. This time though, I shortened the names of factor levels to a fixed length to make use of the automatic grouping of the hts library.
+To give an example, in the population data the age was included in the form "6 year olds" or "over 90 year olds". I had to extract the numeric value and, because the disease data grouped everyone over 80 together, had to sum all ages above 80. Additionally, I had to sum the values for the various states of Germany to obtain population numbers for the regions.
 
-
-
-
-
+In terms of unusual distributions, when I look at the quarterly incidences, there is a spike in EHEC diseased and E.Coli drops to 0 in 2015.
 
 # Bivariate Plots Section
 
@@ -712,23 +733,20 @@ First, I revisit the disease distribution by age, only this time incidences are 
 
 ```{r echo=FALSE, fig.width=10, fig.height=7, warning=FALSE, Bivariate_Plots1}
 
-# first sum over all weeks
 mean_inc_by_age_dis <- cases %>%
+  # first sum over all weeks
   group_by(pop_year, age, region, disease) %>%
-  summarise(date_cases = sum(case_count))
-# second join with population data
-mean_inc_by_age_dis <- left_join(mean_inc_by_age_dis, population, 
-                        by = c("pop_year" = "year", "age" = "age", "region" = "region"))
-# third sum over regions
-mean_inc_by_age_dis <- mean_inc_by_age_dis %>%
+  summarise(date_cases = sum(case_count)) %>%
+  # second join with population data
+  left_join(population, by = c("pop_year" = "year", "age" = "age", "region" = "region")) %>%
+  # third sum over regions
   group_by(pop_year, age, disease) %>%
   summarise(region_cases = sum(date_cases), all_pop=sum(pop_count)) %>%
-# fourth sum over years
+  # fourth sum over years
   group_by(age, disease) %>%
-  summarise(annual_cases = mean(region_cases), mean_pop=mean(all_pop))
-# fifth calculate incidence per 100,000 and round to .1
-mean_inc_by_age_dis$incidence <- round(mean_inc_by_age_dis$annual_cases * 100000 /
-                                         mean_inc_by_age_dis$mean_pop,  digits = 1)
+  summarise(annual_cases = mean(region_cases), mean_pop=mean(all_pop)) %>%
+  # fifth calculate incidence per 100,000 and round to .1
+  mutate(incidence = round(annual_cases * 100000 / mean_pop,  digits = 1))
 
 theme_set(theme_few())
 
@@ -736,8 +754,20 @@ ggplot(mean_inc_by_age_dis, aes(x = age, y = incidence, fill = disease)) +
   geom_area(stat = "identity", position = "stack", colour="black") +
   guides(fill = guide_legend(reverse = TRUE)) +
   scale_x_continuous(breaks=seq(0, 80, by=5)) 
+```
+
+And as a windrose plot:
+
+```{r echo=FALSE, fig.width=10, fig.height=7, warning=FALSE, Bivariate_Plots1}
+
+ggplot(mean_inc_by_age_dis, aes(fill = age, y = incidence, x = disease)) +
+  geom_bar(stat = "identity") +
+  coord_polar() +
+  scale_fill_gradientn(colours = diverge_hcl(81))
 
 ```
+
+I think the difference between campylobacter, norovirus and salmonella on the one hand and rotavirus on the other are much clearer if plotted this way.
 
 I had not expected that the differences are that big. Again, I have to consider that the data contains reported cases, maybe adults just do not see a doctor when they have the syptoms. 
 
@@ -754,7 +784,30 @@ remove(sum_inc_by_age_and_dis)
 
 ```
 
- 
+This shows that only 3 to 5 diseases seem to be responsible for the majority of cases, which is also something I wanted to investigate earlier in the univariate section. Here is the variability the monthly incidences of each disease in Germany for all ages.
+
+```{r echo=FALSE, fig.width=10, fig.height=7, Univariate_Plots7a}
+
+monthly_inc <- cases 
+# going to sum for months, so set all dates to the first of month
+mday(monthly_inc$date) <- 1
+monthly_inc <- monthly_inc %>%
+  # sum for months over ages and regions
+  group_by(date, pop_year, disease) %>%
+  summarize(month_cases = sum(case_count)) %>%
+  # calculate incidence
+  left_join(annual_pop, by = c("pop_year" = "year")) %>%
+  mutate(incidence = round(month_cases * 100000 / pop, digits = 1))
+
+# boxplot of diseases
+qplot(data=monthly_inc, x=disease, y=incidence,
+      geom="boxplot", fill=disease, main="Boxplot of Diseases, Zoomed In") + 
+  guides(fill=FALSE) +
+  ylim(0, 25)
+
+```
+
+Influenza has a low mean but quite a few outliers, up to 109.  
 
 
 
