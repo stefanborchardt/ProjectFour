@@ -475,7 +475,7 @@ As before, I had to combine several files into one. This time though, I shortene
 # Univariate Plots Section
 ## Iteration 3
 
-This time I am going to calculate the incidence by myself, because the datasource did not clearly document on which numbers they calculated it and they were not available for questions. First, I try to replicate the last plot:
+This time I am going to calculate the incidence by myself, because the data source did not clearly document on which numbers they calculated it and they were not available for questions. First, I try to replicate the last plot:
 
 ```{r eval = FALSE, echo=FALSE, message=FALSE, warning=FALSE, Load_the_Data4}
 # Load the Data
@@ -644,7 +644,6 @@ population <- population %>%
   mutate(region = factor(region, pop_levels))
   
 remove(summed)
-
 
 ```
 
@@ -836,15 +835,13 @@ ggplot(weekly_inc_by_dis, aes(x = week, y = incidence, fill = disease)) +
 
 This is going to be a final plot.
 
-
-
 # Univariate Analysis
 ## Iteration 3
 ### What is the structure of your dataset?
 
-The dataset consists of two parts. To compute the incidences on my own, I downloaded the population data of the German states from https://www-genesis.destatis.de/genesis/online/link/tabellen/12411-0011 . There are limitations about the size of data you can obtain for free, so it is only biennial. Initially, this first part of the data contained 736 obs. of 18 variables, but I reduced it to 648 obs. of 6 variables by summing values for regions and ages 80+.
+The dataset consists of two parts. To compute the incidences on my own, I downloaded the population data of the German states from https://www-genesis.destatis.de/genesis/online/link/tabellen/12411-0011 . There are limitations on the size of data you can obtain for free, so it is only biennial. Initially, this first part of the data contained 736 obs. of 18 variables, but I reduced it to 648 obs. of 6 variables by summing values for regions and ages 80+.
 
-The second part contains 2,283,228 observations of 7 variables. For 777 weeks I have the case counts of nine not very rare infectious diseases, which are related to gastrointestinal symptoms, for patients grouped by age and region of Germany. Two redundant columns for the week of the year and the year to match with the population data have been included. The size of this dataset is approximately 80 MB. 
+The second part contains 2,283,228 observations of 7 variables. For 778 weeks I have the case counts of nine not very rare infectious diseases, which are related to gastrointestinal symptoms, for patients grouped by age and region of Germany. Two redundant columns for the week of the year and the year to match with the population data have been included. The size of this dataset is approximately 80 MB. 
 
 ### Did you create any new variables from existing variables in the dataset?
 
@@ -852,9 +849,9 @@ The incidence was calculated, often per plot, to ensure the right case and popul
 
 ### Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? If so, why did you do this?
 
-To give an example, in the population data the age was included in the form "6 year olds" or "over 90 year olds". I had to extract the numeric value and, because the disease data grouped everyone over 80 together, had to sum all ages above 80. Additionally, I had to sum the values for the various states of Germany to obtain population numbers for the regions.
+To give an example, the age was included in the form "6 year olds" or "over 90 year olds" in the population data. I had to extract the numeric value and, because the disease data grouped everyone over 80 together, had to sum all ages above 80. Additionally, I had to sum the values for the various states of Germany to obtain population numbers for the regions.
 
-In terms of unusual distributions, when I look at the quarterly incidences, there is a spike in EHEC diseased and E.Coli drops to 0 in 2015.
+In terms of unusual distributions, when I look at the quarterly incidences, there is a spike in EHEC diseases and E.Coli drops to 0 in 2015.
 
 # Bivariate Plots Section
 
@@ -886,17 +883,6 @@ ggplot(mean_inc_by_age_dis, aes(x = age, y = incidence, fill = disease)) +
   scale_x_continuous(breaks=seq(0, 80, by=5)) 
 ```
 
-Let's focus on the smaller kids:
-
-```{r echo=FALSE, fig.width=10, fig.height=7, warning=FALSE, Bivariate_Plots2}
-
-ggplot(mean_inc_by_age_dis, aes(x = age, y = incidence, fill = disease)) +
-  geom_area(stat = "identity", position = "stack", colour="black") +
-  guides(fill = guide_legend(reverse = TRUE)) +
-  scale_x_sqrt(breaks=round(seq(0.5, 9, length.out = 12)^2 - 1)[-1]) 
-
-```
-
 And as a windrose plot:
 
 ```{r echo=FALSE, fig.width=10, fig.height=7, warning=FALSE, Bivariate_Plots3}
@@ -914,7 +900,7 @@ And finally as dot size representing incidence, vaguely reminding of a violin pl
 ```{r echo=FALSE, fig.width=10, fig.height=7, warning=FALSE, Bivariate_Plots3a}
 
 ggplot(mean_inc_by_age_dis, aes(x = age, size = incidence, y = disease, colour=disease)) +
-  geom_point(stat = "identity", alpha=0.8) +
+  geom_point(stat = "identity", alpha=0.7) +
   scale_colour_manual(values = rainbow_hcl(9)) +
   scale_size_continuous(range=c(0.1, 12)) +
   scale_y_discrete(limits = c("infl", "noro", "rota", "camp", "salm", "ecol", "ehec", "giar", "yers"))
@@ -958,7 +944,8 @@ Next, I'm going to explore how region and disease are related.
 annual_region_pop <- population %>%
   # population numbers for regions over all ages
   group_by(year, region) %>%
-  summarize(pop = sum(pop_count))
+  summarize(pop = sum(pop_count)) %>%
+  ungroup()
 
 mean_inc_by_reg_dis <- cases %>%
   # first sum over all weeks and ages
@@ -982,11 +969,12 @@ ggplot(mean_inc_by_reg_dis, aes(size = incidence, y = disease, x = region, color
   geom_point(stat = "identity") +
   scale_fill_manual(values = rainbow_hcl(9)) + 
   scale_x_discrete(limits = c("n", "e", "s", "w")) + 
-  scale_size_continuous(range = c(1, 20))
+  scale_size_continuous(range = c(1, 20)) +
+  guides(color = guide_legend(reverse = TRUE))
 
 ```
 
-Region East shows higher incidences in both plots, maybe this is caused by an one-time event.
+Region East shows higher incidences in both plots, maybe this is caused by an one-time event. Additionally, I can see the regional outbreak of EHEC in the east in 2011.
 
 ```{r echo=FALSE, fig.width=10, fig.height=10, Bivariate_Plots6}
 
@@ -1046,9 +1034,9 @@ grid.arrange(p1, p2, p3)
 remove(monthly_inc, monthly_inc_rest, monthly_inc_east, monthly_inc_diff)
 ```
 
-Region East has higher incidences for all diseases in almost every single month. Are doctors there more eager to report or is this caused by the age structure?
+The upper plots show incidences in the east and the rest, the lower plot the difference between them. Region East has higher incidences for all diseases in almost every single month. Are doctors there more eager to report or is this caused by the age structure?
 
-```{r echo=FALSE, fig.width=10, fig.height=7, Bivariate_Plots7}
+```{r echo=FALSE, fig.width=10, fig.height=3, Bivariate_Plots7}
 
 pop_east_rest <- population %>%
   filter(year == 2014) %>%
@@ -1057,10 +1045,10 @@ pop_east_rest <- population %>%
   mutate(rest = n + s + w) %>%
   dplyr::select(age, e, rest) %>%
   mutate(e = e * 1000 / sum(e), rest = rest * 1000 / sum(rest)) %>%
-  mutate(diff = e - rest) %>%
+  mutate(rel_diff = (e - rest) * 200 / (e+rest)) %>%
   gather(region, pop_prop, e, rest)
 
-ggplot(pop_east_rest, aes(x = age, size = pop_prop, y = region, colour=diff)) +
+ggplot(pop_east_rest, aes(x = age, size = pop_prop, y = region, colour=rel_diff)) +
   geom_point(stat = "identity", alpha=0.9) +
   scale_colour_gradientn(colours = diverge_hcl(12)) +
   scale_size_continuous(range=c(0.1, 10)) +
@@ -1068,22 +1056,76 @@ ggplot(pop_east_rest, aes(x = age, size = pop_prop, y = region, colour=diff)) +
 
 ```
 
-The size of the dots shows what proportion the different ages have within the east and the rest, while color indicates how big the difference between the regions is. The East has relatively fewer people around 20 and 50, and more people 60+. 
+The size of the dots shows what proportion the different ages have within the east and the rest, while color indicates how big the difference between the regions is. The East has relatively fewer people around 20, and more people 60+.
 
 # Bivariate Analysis
 
 ### Talk about some of the relationships you observed in this part of the investigation. How did the feature(s) of interest vary with other features in the dataset?
 
+I saw that there are seasonal patterns in the incidences of some diseases. The incidence is also influenced by the age of the patient. One region, East, has higher incidences in general.
+
+In a side exploration with incidence from another source it became clear that the aspect of reporting behavior is important, but beyond the scope of the data set.
+
 ### Did you observe any interesting relationships between the other features (not the main feature(s) of interest)?
+
+The age structure of the East and the rest of Germany is different, the consequence of which is hopefully going to be explained in the next section. 
 
 ### What was the strongest relationship you found?
 
+I think the time of the year has the strongest influence on incidence, but I am not sure if I can quantify that. 
 
 # Multivariate Plots Section
 
-```{r echo=FALSE, Multivariate_Plots}
+```{r echo=FALSE, fig.width=10, fig.height=10, Multivariate_Plots}
+
+theme_set(theme_few())
+
+annual_age_pop <- population %>%
+  # population numbers for all ages
+  group_by(year, age) %>%
+  summarize(pop = sum(pop_count)) %>%
+  ungroup()
+
+inc_by_age_reg_dis <- cases %>%
+  mutate(date = year(date)) %>%
+  dplyr::select( - week) %>%
+  # cases per year, age. disease and region
+  group_by(date, pop_year, age, disease, region) %>%
+  summarise(annual_reg_cases = sum(case_count)) %>%
+  left_join(population, by=c("pop_year" = "year", "age" = "age", 
+                                    "region" = "region")) %>%
+  mutate(reg_inc = calc_inc(annual_reg_cases, pop_count)) %>%
+  # cases per year, age and disease
+  ungroup() %>%
+  dplyr::select( - pop_count) %>%
+  group_by(date, pop_year, age, disease) %>%
+  mutate(annual_cases = sum(annual_reg_cases)) %>%
+  left_join(annual_age_pop, by=c("pop_year" = "year", "age" = "age")) %>%
+  mutate(incidence = calc_inc(annual_cases, pop)) %>%
+  ungroup() %>%
+  dplyr::select(- annual_cases, - annual_reg_cases, - pop, - pop_year) %>%
+  # difference to mean 
+  mutate(rel_diff = ifelse(incidence > 0, 
+                           as.integer((reg_inc - incidence) * 100 / incidence), 
+                           0)) %>%
+  # only region of max difference 
+  group_by(date, age, disease) %>%
+  mutate(top_reg = max(rel_diff)) %>%
+  ungroup() %>%
+  filter(rel_diff == top_reg) %>%
+  dplyr::select( - top_reg) 
+  
+ggplot(inc_by_age_reg_dis, aes(x = age, size = rel_diff, y = disease, colour=region)) +
+  geom_point(stat = "identity", position = position_jitter(width=0.3, height=1), alpha = 0.3) +
+  scale_colour_manual(values = rainbow_hcl(4)) +
+  scale_size_area(max_size = 8) 
+  
 
 ```
+
+
+season over time facet disease
+
 
 # Multivariate Analysis
 
