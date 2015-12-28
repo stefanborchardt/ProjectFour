@@ -657,7 +657,7 @@ calc_inc <- function (case_count, pop_count) {
   #   pop_count - the population count
   # Returns:
   #   incidence, rounded to .1
-  return(round(case_count * 100000 / pop_count, digits = 1))
+  return(round(case_count * 100000 / pop_count, digits = 2))
 } 
 
 inc_by_year <- cases %>%
@@ -1056,7 +1056,7 @@ ggplot(pop_east_rest, aes(x = age, size = pop_prop, y = region, colour=rel_diff)
 
 ```
 
-The size of the dots shows what proportion the different ages have within the east and the rest, while color indicates how big the difference between the regions is. The East has relatively fewer people around 20, and more people 60+.
+The size of the dots shows what proportion the different ages have within the east and the rest, while color indicates how big the difference between the regions is. The East has relatively fewer people around 20, and more people 60+. The difference in small kids is relatively low, though, and I should not forget that I am comparing incidences as cases per 100,000 already. 
 
 # Bivariate Analysis
 
@@ -1116,16 +1116,107 @@ inc_by_age_reg_dis <- cases %>%
   dplyr::select( - top_reg) 
   
 ggplot(inc_by_age_reg_dis, aes(x = age, size = rel_diff, y = disease, colour=region)) +
-  geom_point(stat = "identity", position = position_jitter(width=0.3, height=1), alpha = 0.3) +
+  geom_point(stat = "identity", position = position_jitter(width=0.3, height=1.1), alpha = 0.25) +
   scale_colour_manual(values = rainbow_hcl(4)) +
-  scale_size_area(max_size = 8) 
+  scale_size_area(max_size = 7)
   
+remove(inc_by_age_reg_dis)
 
 ```
 
+The plot shows the relative difference of incidences (in percent, size of dots) for the diseases and various ages. There is one dot in the color of the region with the highest deviation from the mean for every year from 2001 to 2015. 
 
-season over time facet disease
+For rotavirus, there is a rather big deviation for all ages and years in region East. For almost all diseases, region East deviates most for people under 18. Historically, there was a much more centralised healthcare in the East, which might still influence the tendency of doctors to report cases. There are more patterns in the plot, for which I do not have a potential explanation.
 
+After the exploration of age/ region/ disease is eshausted, I will have a look at the seasonality again. 
+
+```{r echo=FALSE, fig.width=10, fig.height=8, Multivariate_Plots2}
+
+inc_by_dis <- cases %>%
+  filter(disease %in% c("noro", "rota", "camp", "salm", "infl")) %>%
+  # interested in year and week number only
+  mutate(year = year(date)) %>%
+  dplyr::select( - date) %>%
+  # sum over ages and regions
+  group_by(year, week, pop_year, disease) %>%
+  summarise(annual_week_cases = sum(case_count)) %>%
+  left_join(annual_pop, by = c("pop_year" = "year")) %>%
+  mutate(incidence = calc_inc(annual_week_cases, pop)) %>%
+  ungroup() %>%
+  # discard error-prone weeks
+  filter(week > 1 & week < 52) %>%
+  dplyr::select(year, week, disease, incidence)
+
+pl <- function (disease) {
+  data <- inc_by_dis[inc_by_dis$disease == disease, ]
+  ggplot(data, aes(x = year, y = week, fill=incidence)) +
+    geom_raster() +
+    scale_fill_gradientn(colours = heat_hcl(20)) +
+    ggtitle(disease)
+}
+
+p1 <- pl("camp")
+p2 <- pl("noro")
+p3 <- pl("salm")
+p4 <- pl("rota")
+p5 <- pl("infl")
+
+grid.arrange(p1, p2, p3, p4, p5)
+remove(inc_by_dis, p1, p2, p3, p4, p5)
+```
+
+The seasonality, which showed in the plot of the annual means above, is still there, but there are some changes over time. When I forecast noro- or rotavirus later, I will limit the data to years from 2008. 
+
+Norovirus has high incidences in small kids and older people. Maybe the seasonality varies with age for norovirus.
+
+```{r echo=FALSE, fig.width=10, fig.height=8, Multivariate_Plots3}
+
+inc_noro_age_dis <- cases %>%
+  filter(disease == "noro") %>%
+  # interested in year and week number only
+  mutate(year = year(date)) %>%
+  dplyr::select( - date) %>%
+  # sum over regions
+  group_by(year, week, pop_year, age) %>%
+  summarise(annual_age_week_cases = sum(case_count)) %>%
+  left_join(annual_age_pop, by = c("pop_year" = "year", "age" = "age")) %>%
+  mutate(incidence = calc_inc(annual_age_week_cases, pop)) %>%
+  ungroup() %>%
+  # discard error-prone weeks
+  filter(week > 1 & week < 52) %>%
+  dplyr::select(year, week, age, incidence)
+
+pl <- function (age) {
+  data <- inc_noro_age_dis[inc_noro_age_dis$age == age, ]
+  ggplot(data, aes(x = year, y = week, fill=incidence)) +
+    geom_raster() +
+    scale_fill_gradientn(colours = heat_hcl(20)) +
+    ggtitle(age)
+}
+
+p1 <- pl(0)
+p2 <- pl(1)
+p3 <- pl(2)
+p4 <- pl(3)
+p5 <- pl(4)
+p6 <- pl(5)
+
+grid.arrange(p1, p2, p3, p4, p5, p6)
+
+p1 <- pl(70)
+p2 <- pl(75)
+p3 <- pl(77)
+p4 <- pl(78)
+p5 <- pl(79)
+p6 <- pl(80)
+
+grid.arrange(p1, p2, p3, p4, p5, p6)
+
+remove(p1, p2, p3, p4, p5, p6)
+
+```
+
+While the seasonal pattern is similar within the groups, it looks different between the groups. I will consider that in the final version of the seasonality plot.
 
 # Multivariate Analysis
 
