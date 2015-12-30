@@ -21,6 +21,7 @@ library(parallel)
 library(hts)
 library(season)
 library(forecast)
+library(changepoint)
 library(ggfortify)
 
 ```
@@ -1165,10 +1166,24 @@ p4 <- pl("rota")
 p5 <- pl("infl")
 
 grid.arrange(p1, p2, p3, p4, p5)
-remove(inc_by_dis, p1, p2, p3, p4, p5)
+remove(p1, p2, p3, p4, p5)
 ```
 
-The seasonality, which showed in the plot of the annual means above, is still there, but there are some changes over time. When I forecast noro- or rotavirus later, I will limit the data to years from 2008. 
+The seasonality, which showed in the plot of the annual means above, is still there, but there are some changes over time. When I forecast noro- or rotavirus later, I will limit the data to years from 2008: 
+
+```{r echo=FALSE, fig.width=10, fig.height=4, Multivariate_Plots2a}
+
+plcpt <- function(disease) {
+  # Plots the changepoints (by mean) for a disease
+  incts <- ts(inc_by_dis[inc_by_dis$disease == disease, ]$incidence, 
+            frequency = 50, start = 2001)
+  autoplot(cpt.mean(incts), cpt.linetype = 'solid')
+}
+
+plcpt("noro")
+plcpt("salm")
+remove(inc_by_dis)
+```
 
 Norovirus has high incidences in small kids and older people. Maybe the seasonality varies with age for norovirus.
 
@@ -1343,7 +1358,7 @@ tb <- function (disease) {
               colour = "red") 
 
 }
-   
+
 tb("y_noro")
 tb("o_noro")
 
@@ -1356,43 +1371,160 @@ tb("y_rota")
 
 The thick black and the thin red line are the actual incidence of a disease and age group. The dashed line is the forecast with a .5 confidence interval. The thin black line shows the residuals of the model.
 
+I would not have expected the forecasts to be that good. 
 
+I think I have enough insight now to prepare the final plots.
 
 # Multivariate Analysis
 
 ### Talk about some of the relationships you observed in this part of the investigation. Were there features that strengthened each other in terms of looking at your feature(s) of interest?
 
+In this part I could confirm and refine the insights from previous sections. Season of the year and age are the major factors when predicting the disease of a patient with gastrointestinal symptoms. I could not find an explanation for the generally higher incidences in the East.  
+
 ### Were there any interesting or surprising interactions between features?
 
-### OPTIONAL: Did you create any models with your dataset? Discuss the strengths and limitations of your model.
+I could not find a relationship between age and season or region and season for the diseases. I decided to limit further exploration to years from 2008 on, because of a change in incidences I had not noticed before.
+
+### Did you create any models with your dataset? Discuss the strengths and limitations of your model.
+
+I forecasted incidences for some diseases and age groups, which were surprisingly accurate. Nevertheless, the forecast is based on the assumption of continuity, which limits the ability to foresee unusual events. 
 
 ------
 
 # Final Plots and Summary
 
+```{r echo=FALSE}
+#remove years before 2008 and error-prone weeks
+cases <- cases %>%
+  filter(year(date) > 2007) %>%
+  filter(week > 1 & week < 52)
+
+theme_set(theme_few())
+```
+
+
 ### Plot One
-```{r echo=FALSE, Plot_One}
+
+```{r echo=FALSE, fig.width=10, fig.height=4, Plot_One}
+mean_inc_by_age_dis <- cases %>%
+  filter(disease %in% c("noro", "rota", "camp", "salm", "infl")) %>%
+  # first sum over all weeks
+  group_by(pop_year, age, region, disease) %>%
+  summarise(date_cases = sum(case_count)) %>%
+  # second join with population data
+  left_join(population, 
+            by = c("pop_year" = "year", "age" = "age", "region" = "region")) %>%
+  # third sum over regions
+  group_by(pop_year, age, disease) %>%
+  summarise(region_cases = sum(date_cases), all_pop=sum(pop_count)) %>%
+  # fourth mean over years
+  group_by(age, disease) %>%
+  summarise(annual_cases = mean(region_cases), mean_pop=mean(all_pop)) %>%
+  # fifth calculate incidence per 100,000 and round to .1
+  mutate(incidence = calc_inc(annual_cases, mean_pop)) %>%
+  ungroup()
+
+ggplot(mean_inc_by_age_dis, 
+       aes(x = age, size = incidence, y = disease, colour=disease)) +
+  geom_point(stat = "identity", alpha=0.7) +
+  scale_colour_manual(values = rainbow_hcl(5), guide = "none") +
+  scale_size_area(max_size = 6) +
+  scale_y_discrete(limits = c("infl", "noro", "rota", "camp", "salm"),
+                   labels = c("influenza", "norovirus", "rotavirus", 
+                              "campylobacter", "salmonella")) +
+  labs(x = "Age", y = "Disease", size = "Incidence", title = "Incidence vs. Age" ) +
+  scale_x_continuous(breaks = seq(0, 80, 5), 
+                     labels = c(seq(0, 79, 5), "80+" ))
 
 ```
 
 ### Description One
 
+The plot shows the mean annual incidence of the top five diseases for the age of the patient. The gastro-intestinal symptoms of a middle-aged patient are more likely to be caused by campylobacter than rotavirus. 
 
 ### Plot Two
-```{r echo=FALSE, Plot_Two}
+
+```{r echo=FALSE, fig.width=10, fig.height=5, Plot_Two}
+weekly_inc_by_dis <- cases %>%
+  filter(disease %in% c("noro", "rota", "camp", "salm")) %>%
+  # interested in week number only
+  dplyr::select( - date) %>%
+  # sum over regions
+  group_by(week, pop_year, age, disease) %>%
+  summarise(week_cases = sum(case_count)) %>%
+  left_join(annual_age_pop, by = c("pop_year" = "year", "age" = "age")) %>%
+  # filter for very young, young and older people
+  mutate(age_group = ifelse(age < 7, "0-6 years", 
+                            ifelse(age > 17 & age < 56, "18-55 years",
+                                   ifelse(age > 74, "75+ years", "other")))) %>%
+  filter(age_group != "other") %>%
+  ungroup() %>%
+  dplyr::select( - age, - pop_year) %>%
+  # calculate incidence for age group and disease
+  group_by(week, disease, age_group) %>%
+  summarise(group_wk_cases = sum(week_cases), group_pop = sum(pop)) %>%
+  mutate(incidence = calc_inc(group_wk_cases, group_pop)) %>%
+  ungroup() %>%
+  dplyr::select(- starts_with("group"))
+
+ggplot(weekly_inc_by_dis, aes(x = week, y = incidence, fill = disease)) +
+  geom_area(position = "identity", colour="black", alpha=0.5, size = 1) +
+  scale_x_continuous(breaks=seq(2, 50, by=4)) +
+  facet_wrap(~ age_group) + 
+  scale_fill_manual(values = rainbow_hcl(4),
+                    breaks = c("noro", "rota", "camp", "salm"),
+                    labels = c("norovirus", "rotavirus", 
+                              "campylobacter", "salmonella")) +
+  labs(x = "Week of the Year", y = "Incidence", fill = "Disease", title = "Incidence vs. Season" ) + 
+  theme(legend.position = "bottom", legend.box = "horizontal", 
+        strip.text.x = element_text(size = 12))
 
 ```
 
 ### Description Two
 
+These three plots show the incidence of four diseases during the course of the year for different age groups. The symptoms of a middle-aged patient are more likely to be caused by norovirus in winter and campylobacter in summer.
 
 ### Plot Three
-```{r echo=FALSE, Plot_Three}
 
+```{r echo=FALSE, fig.width=10, fig.height=3, Plot_Three}
+
+tb <- function (disease, title) {
+  # Plots forecast for a disease
+  fit <- tbats(ts(weekly_inc_dis_ag_to13[ , disease], frequency = 50, start = 2008), 
+              num.cores=NULL)
+  fc <- forecast(fit, h=150, level=c(50))
+  fitres <- fortify(fit$errors)   
+  actual <- fortify(ts(weekly_inc_dis_ag_fr13[ , disease], 
+                       frequency = 50, start = 2014))
+  autoplot(fc, conf.int.colour = "lightgray", 
+           predict.size = .75, ts.size = .75, 
+           predict.colour = "black", predict.linetype = 5) + 
+    scale_x_continuous(breaks = c(2008, 2010, 2012, 2014, 2016)) +
+    geom_line(data = actual, aes(x = Index, y = Data), size = .5, 
+              colour = "red") +
+    labs(x = "Year", y = "Incidence", title = title) 
+
+}
+
+tb("y_noro", "Incidence vs. Time: Norovirus 0-6 years")
+tb("o_noro", "Incidence vs. Time: Norovirus 75+ years")
 ```
 
 ### Description Three
 
+The two plots above show forecasts for the incidence of norovirus for two age groups. The actual incidence (red line) stays mostly within a 50%-confidence interval (grey ribbon) of the forecast. 
+
 ------
 
 # Reflection
+
+I had to start over twice before I could choose a good selection of data from the source. When I analyzed single variables age and season of the year emerged as major factors.
+
+I could not explain higher incidences in region East when I explored the relationships between two variables. Further, when contrasting with data from another source it became clear that the way how the data is gathered by the Robert Koch Institute limits how well it describes the reality.
+
+My multivariate analysis confirmed and refined earlier findings. I identified changepoints in the data which helped to limitmy data to relevant years. I could not find a relationship between age and season or region and season,  but I was able to forecast some diseases rather accurately. 
+
+The libraries which I found most useful for analyzing time series are lubridate, forecast, changepoint, and ggfortify. If I was able to access the data source without having to download separate sheets manually I could try to get insights from finer geographical information.
+
+
