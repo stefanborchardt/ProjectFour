@@ -26,10 +26,11 @@ library(ggfortify)
 
 ```
 
-# Univariate Plots Section
-## Iteration 1
+# Iteration 1 
 
-```{r echo=FALSE, Load_the_Data}
+## 1.1 Plots
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE, Load_the_Data}
 # Load the Data
 #getwd()
 #setwd("R Scripts/p4")
@@ -76,12 +77,19 @@ remove(c, ec, eh, g, h, i, l, m, n, r, sa, sh, t)
 long_inc <- gather(incidences, disease, incidence, campylobacter:yersiniosis)
 wide_inc <- dcast(long_inc, date ~ age + disease)
 
-
 ```
 
-I use data on infectious diseases which is collected by the Robert Koch Institute in Germany as a official statistic. From various customizable selections available, I chose the incidence of 14 diseases which can cause stomach flu or diarrhea, with the help of a doctor. My idea is that patient's characteristics can help to point out the most likely causes of similar symptoms.
+I use data on infectious diseases which is collected by the Robert Koch
+Institute in Germany as an official statistic. From various customizable
+selections available, I chose the incidence of 14 diseases which can cause 
+stomach flu or diarrhea, with the help of a doctor. My idea is that patient's 
+characteristics can help to point out the most likely causes of similar
+symptoms.
 
-Because I selected which data to include through the interface at https://survstat.rki.de , I already have some understanding of the structure of the data. On the other hand, because I did the data wrangling myself, I have to check that joins and value transformations worked as intended.
+Because I selected which data to include through the interface at
+https://survstat.rki.de , I already have some understanding of the structure of
+the data. On the other hand, because I did the data wrangling myself, I have to
+check that joins and value transformations worked as intended.
 
 At first, I display some textual summaries:
 
@@ -93,15 +101,21 @@ summary(incidences)
 levels(incidences$age)
 ```
 
-The factor age is not evenly spaced, young people have finer granularity. 
+I have data from 2001 until recently. The factor age is not evenly spaced, young
+people have finer granularity. Only three diseases have a median incidence above 
+1 in 100,000. An extreme example is influenza, with a maximum of 222 and a 
+median of 0.000.
 
-To see if my data wrangling is plausible I use the library hts to plot a grouped time series:
+To see if my data wrangling is plausible I use the library `hts` to plot
+a grouped time series. The next plots show the incidences over time grouped by
+age and disease.
 
-```{r echo=FALSE, fig.width=10, fig.height=10, Univariate_Plots1}
+```{r echo=FALSE, fig.width=10, fig.height=6, Univariate_Plots1}
 # convert to time series, therefore remove date
 tsinc <- ts(subset(wide_inc, select= -date), frequency=52, start=2001)
 # data can be grouped by age and disease, prepare description
-grpdescr <- rbind(rep(levels(long_inc$age), 14), rep(levels(long_inc$disease), 16))
+grpdescr <- rbind(rep(levels(long_inc$age), 14), 
+                  rep(levels(long_inc$disease), 16))
 rownames(grpdescr) <- c("Age", "Disease")
 # create grouped time series
 gtsinc <- gts(tsinc, groups=grpdescr)
@@ -109,22 +123,40 @@ plot(gtsinc, levels=c(1, 2), labels=F)
 
 ```
 
-Some age groups seem to be more prone to these infectious diseases and there are seasonal patterns.
+Some age groups seem to be more prone to these infectious diseases and there are
+seasonal patterns. There are long-term changes and only three diseases reach
+high incidences. 
 
-# Univariate Analysis
-## Iteration 1
+This looks quite promising for a plausibility check. I will
+adapt my selection of data for further exploration.
+
+## 1.2 Analysis 
+
 ### What is the structure of your dataset?
 
-The incidence of the diseases, as cases per 100,000, is reported by week number of the last 15 years and by age group of the patients. After combining 14 separate files, the dataset contains 12,416 observations of 16 variables: The incidence of the 14 diseases for each week and age group. I filled in zeros where necessary, so that all age groups and diseases are present at any week to help analyzing time series at later stages.
-The patient's age is included in groups of each year for small children, groups of five years for persons from 5 to 29 years and 10-year groups for ages 30 to 79. People over 80 years are the last group. 
+The incidence of the diseases, as cases per 100,000, is reported by week number 
+of the last 15 years and by age group of the patients. After combining 14
+separate files, the dataset contains 12,416 observations of 16 variables: The
+incidence of the 14 diseases for each week and age group. I filled in zeros
+where necessary, so that all age groups and diseases are present at any week to
+help analyzing time series at later stages. The patient's age is included in
+groups of each year for small children, groups of five years for persons from 5
+to 29 years and 10-year groups for ages 30 to 79. People over 80 years are the
+last group.
 
 ### What is/are the main feature(s) of interest in your dataset?
 
-I'd like to know, when a patient sees a doctor with gastrointestinal symptoms, what are the most likely infectious diseases to check. From a first look, a couple of the diseases have a maximum incidence lower than 1 per 100,000, but norovirus, salmonella and campylobacter have medians above 1 per 100,000. 
+I'd like to know, when a patient sees a doctor with gastrointestinal symptoms,
+what are the most likely infectious diseases to check. From a first look, a
+couple of the diseases have a maximum incidence lower than 1 per 100,000, but
+norovirus, salmonella and campylobacter have medians above 1 per 100,000.
 
 ### What other features in the dataset do you think will help support your investigation into your feature(s) of interest?
 
-I assume the age of the patient and the time of the year to be other important factors. For a first glimpse, I plotted the dataset as a time series using hts, which revealed a seasonal pattern for some diseases and differences between the age groups. 
+I assume the age of the patient and the time of the year to be other important 
+factors. For a first glimpse, I plotted the dataset as a time series using 
+`hts`, which revealed a seasonal pattern for some diseases and differences
+between the age groups.
 
 ### Did you create any new variables from existing variables in the dataset?
 
@@ -132,19 +164,33 @@ No, existing values were transformed only.
 
 ### Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? If so, why did you do this?
 
-The interface I had to extract the data from, SurvStat@RKI 2.0  https://survstat.rki.de , allows to download only two dimensions at once, for which I chose patient age group and the week. The 14 data files typically had 16 columns and 731 rows each. I combined these files into one by joining the separate data frames after I had changed the data format of some columns. Finally, I melted the combined data into one set of 12,416 observations of 16 variables.
+The interface I had to extract the data from, SurvStat@RKI 2.0 
+https://survstat.rki.de , allows to download only two dimensions at once, for
+which I chose patient age group and the week. The 14 data files typically had 16
+columns and 731 rows each. I combined these files into one by joining the
+separate data frames after I had changed the data format of some columns.
+Finally, I melted the combined data into one set of 12,416 observations of 16
+variables.
 
-# Univariate Plots Section
-## Iteration 2
+---
 
-The first look at the data was so promising, that I decided to increase the number of variables I take into consideration. Unfortunately, the limitations of the interface required to download a total of 72 files to additionally include gender and region of the patients. I removed the five most rare diseases of iteration 1.
+# Iteration 2
+
+## 2.1 Plots
+
+The first look at the data was so promising, that I decided to increase the 
+number of variables I take into consideration. Unfortunately, the limitations of
+the interface required to download a total of 72 files to additionally include 
+gender and region of the patients. I removed the five most rare diseases of 
+iteration 1, because I think a maximum incidence below 1.5 in 100,000 is not
+helpful to answer the question what disease a patient is _likely_ to have.
 
 ```{r eval = FALSE, echo=FALSE, Load_the_Data2}
 # Load the Data
-####################################################################################
-#########  switch to eval = TRUE if you want to read 'raw' files again #############
-#########  otherwise see next chunk                                    #############
-####################################################################################
+################################################################################
+#########  switch to eval = TRUE if you want to read 'raw' files again #########
+#########  otherwise see next chunk                                    #########
+################################################################################
 
 #getwd()
 #setwd("R Scripts/p4")
@@ -160,7 +206,8 @@ read_join <- function (region, gender, file, disease, to_join) {
   #   read (and joined) data frame    
 
   # read tab-delimited CSV containing nuls
-  filename <- paste(paste(paste(region, gender, sep="\\"), file, sep="\\"), "csv", sep=".")
+  filename <- paste(paste(paste(region, gender, sep="\\"), 
+                          file, sep="\\"), "csv", sep=".")
   rd <- read.delim2(filename, skipNul = T)
   # reformat age column names
   colnames(rd)[2:ncol(rd)] <- gsub(pattern="\\..*", replacement="",
@@ -254,27 +301,29 @@ write.csv(incidences, file="incidences.csv", row.names=F)
 # I'm interested in which diseases are most likely 
 # for the patient and reducing them to a single factor does
 # not seem appropriate
-long_inc <- gather(incidences, disease, incidence, camp, ecol, ehec, giar, infl, noro, rota, salm, yers)
+long_inc <- gather(incidences, disease, incidence, 
+                   camp, ecol, ehec, giar, infl, noro, rota, salm, yers)
 wide_inc <- dcast(long_inc, date ~ disease + age + gender + region)
 
 ```
 
-```{r echo=FALSE, fig.width=10, fig.height=7, message=FALSE, warning=FALSE, Load_the_Data3}
+```{r echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE, Load_the_Data3}
 #getwd()
 #setwd("R Scripts/p4")
-####################################################################################
-#########  read data converted above                                   #############
-####################################################################################
+################################################################################
+#########  read data converted above                                   #########
+################################################################################
 # load prepared data
 incidences <- read.csv("incidences.csv")
 incidences$date <- as.Date(incidences$date, "%Y-%m-%d")
 incidences <- arrange(incidences, date)
 # remove redundant week column for recasting
-long_inc <- gather(subset(incidences, select=-week), disease, incidence, camp: yers)
+long_inc <- gather(subset(incidences, select=-week), 
+                   disease, incidence, camp: yers)
 wide_inc <- dcast(long_inc, date ~ disease + age + gender + region)
 ```
 
-Again, I check the structure and get an overview:
+<a name="structure"/>Again, I check the structure and get an overview:
 
 ```{r echo=FALSE, fig.width=10, fig.height=7, Univariate_Plots2}
 
@@ -284,12 +333,26 @@ summary(incidences)
 
 ```
 
-Also, I plot a time series to see that the data wrangling worked. 
+This time, in addition to deriving a date from the week of the year in the
+original data, I keep the week number to facilitate the investigation of
+seasonality. Only nine diseases are included, but the incidences for regions of
+Germany and gender of the patient have been added. 
 
-```{r echo=FALSE, fig.width=10, fig.height=7, Univariate_Plots3}
+I notice that the maximum incidences are higher now. The reason is that since I
+respect region and gender, I see the more extreme values, which have been
+averaged out before. The means are roughly the same, I think the difference is
+caused by rounding errors in the original data, which sets everything below 0.1 
+to 0. 
+
+Also, I plot a time series to see that the data wrangling worked. In addition to
+incidences over time grouped by age and disease, I will also plot grouped by
+region and gender:
+
+```{r echo=FALSE, fig.width=10, fig.height=6, Univariate_Plots3}
 # convert to time series, therefore remove date
 tsinc <- ts(subset(wide_inc, select= -date), frequency=52, start=2001)
-# create grouped time series, 'characters' explain how column labels translate to groups
+# create grouped time series, 'characters' explain how column labels translate 
+# to groups
 gtsinc <- gts(tsinc, characters=list(5, 4, 4, 1), gnames=c(
   "Disease", "Age", "Gender", "Region", 
   "Disease+Age", "Disease+Gender", "Disease+Region", 
@@ -300,104 +363,136 @@ plot(gtsinc, levels=c(3, 4), labels=F)
 
 ```
 
-Same as before, only adding gender is a bit disappointing. But there are differences between the regions.
+The first plots are about the same as before. Adding gender is a bit
+disappointing, but there are differences between the regions.
 
-A look into the distribution of incidences, also experimenting on equidistant breaks on log scale:
+The plots allow to check for outliers and plausability, but are not intended for
+thorough analysis. The spike at the end of 2009 seems to have hit both genders
+almost equally, and all regions to varying degrees, but only a narrow age group,
+that is a legitimate outlier. Overall, the lines rise and fall continuously, so
+I can assume that there are no single erroneous data points. No line is so
+different from the others that it could be a sum.
 
-```{r echo=FALSE, fig.width=10, fig.height=5, warning=FALSE, Univariate_Plots4}
+From the [structure](#structure) I can derive that histograms for all variables
+beside the disease incidences will be evenly distributed, because incidences of
+zero were filled to obtain a continuous time series. 
+
+If I temporarily remove these filled values I might get some insights:
+
+```{r echo=FALSE, fig.width=10, fig.height=5, message=FALSE, cache=TRUE, Univariate_Plots3a}
+# remove observations with 0 incidence
+long_inc_nz <- filter(long_inc, incidence > 0) 
 
 theme_set(theme_few())
-
-# histograms of incidences
-qplot(data=long_inc, x=incidence, geom="histogram", main="Plain Histogram of Incidences") 
-qplot(data=long_inc, x=incidence, geom="histogram", binwidth=0.3, main="Adjusted Binwidth")
-# trying to space breaks evenly
-ggplot(data=long_inc, aes(x=incidence)) + geom_histogram(binwidth=0.3) +
-  scale_x_log10(breaks=c(rev(round(exp(-seq(from=0.1, to=5, length.out=10)), digits=2)),
-                         round(exp(seq(from=0.5, to=6, length.out=10)), digits=2))) +
-  labs(title = "Logarithmic Incidence")
+#histograms
+p1 <- qplot(data=long_inc_nz, x=disease, fill=disease, 
+            main="Histogram of Diseases") + guides(fill=FALSE)
+p2 <- qplot(data=long_inc_nz, x=region, fill=region, 
+            main="Histogram of Regions") + guides(fill=FALSE)
+p3 <- qplot(data=long_inc_nz, x=gender, fill=gender, 
+            main="Histogram of Genders") + guides(fill=FALSE)
+p4 <- qplot(data=long_inc_nz, x=age, main="Histogram of Ages")
+grid.arrange(p1, p2, p3, p4)
 ```
 
-At first I was suprised that the occurence of diseases seemed evenly distributed over all ages, then I recoded the factor levels:
+At first I was suprised that the occurence of diseases seemed evenly distributed
+over all ages, then I recoded the factor levels:
 
-```{r echo=FALSE, fig.width=10, fig.height=5, Univariate_Plots5}
-# histogram of ages
-qplot(data=subset(long_inc, incidence>0), x=age, geom="bar", main="Plain Histogram of Ages") 
-
-long_inc$age_eqdist <- long_inc$age
+```{r echo=FALSE, fig.width=10, fig.height=4, cache=TRUE, Univariate_Plots4}
 # recode levels into bins of 10 years
-levels(long_inc$age_eqdist) <- c(rep("A00", 6), "A10", "A10", "A20", "A20", "A30", "A40", "A50", "A60", "A70", "A80")
-qplot(data=subset(long_inc, incidence>0), x=age_eqdist, geom="bar", 
+long_inc_nz$age_eqdist <- long_inc_nz$age
+levels(long_inc_nz$age_eqdist) <- c(rep("A00", 6), "A10", "A10", "A20", "A20",
+                                 "A30", "A40", "A50", "A60", "A70", "A80")
+qplot(data=long_inc_nz, x=age_eqdist, geom="bar",  
       main="Adjusted Factor Levels of Ages ") 
-long_inc$age_eqdist <- NULL
+long_inc_nz$age_eqdist <- NULL
 ```
 
 Kids are more prone to infectious diseases it seems. 
 
-It is hard to compare regions by number of disease occurences, so I gradually increased the threshold with the help of the incidence histogram from above:
+At last I have a look at the distribution of dates:
 
-```{r echo=FALSE, fig.width=10, fig.height=7, Univariate_Plots6}
+```{r echo=FALSE, fig.width=10, fig.height=4, cache=TRUE, Univariate_Plots4a}
+# histogram of dates
+qplot(data=long_inc_nz, x=date, main="Histogram of Dates, Weekly", binwidth=7)
+```
 
-pl <- function (inc) {
-  # plots a histogram of regions
-  return(qplot(data=subset(long_inc, incidence>inc), x=region, geom="bar", fill=region,
-               main=paste("Regions with Incidence > ", inc, sep="")) + 
-           guides(fill=FALSE) 
-         )
-}
+There are sometimes no or twice the counts at the change of the year. This might
+be caused by the 2-week holidays at the end of the year or by errors in date
+conversion.
 
-grid.arrange(pl(0), pl(1), pl(10), pl(100))
+Next, I have a look into the distribution of __incidences__, also experimenting
+on equidistant breaks on log scale:
+
+```{r echo=FALSE, fig.width=10, fig.height=4, warning=FALSE, cache=TRUE, Univariate_Plots5}
+
+# histograms of incidences
+qplot(data=long_inc, x=incidence, geom="histogram", binwidth=0.3, 
+      main="Histogram of Incidences")
+# trying to space breaks evenly
+ggplot(data=long_inc, aes(x=incidence)) + geom_histogram(binwidth=0.3) +
+  scale_x_log10(breaks=c(rev(round(exp(-seq(from=0.1, to=5, length.out=10)), 
+                                   digits=2)),
+                         round(exp(seq(from=0.5, to=6, length.out=10)), 
+                               digits=2))) +
+  labs(title = "Logarithmic Incidence")
+```
+
+<a name="incidences"/>Most incidences (per week, region, age, gender and 
+disease) are around 1.5 cases per 100,000 people, it seems. 
+
+```{r echo=FALSE, fig.width=10, fig.height=5, message=FALSE, Univariate_Plots5a}
+summary(long_inc$incidence)
+```
+
+It is hard to compare regions by number of disease occurences, so how are the
+incidences distributed between the regions?
+
+```{r echo=FALSE, fig.width=10, fig.height=7, cache=TRUE, warning=FALSE, Univariate_Plots6}
+
+qplot(data = long_inc_nz, x = region, y = incidence, geom = "boxplot", 
+      fill = region, main = "Boxplot of Weekly Disease Incidences, Zoomed In") +
+  guides(fill = FALSE) + ylim(0, 15)
+
 ```
 
 High incidences seem to occur more often in the East.
 
-I use the same approach with the diseases:
+I remember seasonal patterns from the initial time series plot. The next plots
+show the count of incidences above a [threshold](#incidences) over the week of 
+the year:
 
-```{r echo=FALSE, fig.width=10, fig.height=7, Univariate_Plots7}
-
-pl <- function (inc) {
-  # plots a histogram of diseases
-  return(
-    qplot(data=subset(long_inc, incidence>inc), x=disease, geom="bar", fill=disease,
-          main=paste("Diseases with Incidence > ", inc, sep="")) + 
-      guides(fill=FALSE)
-  )
-}
-
-grid.arrange(pl(0), pl(1), pl(10), pl(100))
-```
-
-I got the impression that only 3-5 diseases reach high incidences, so I will have a look at the variability later in the bivariate section.
-
-I remember seasonal patterns from the initial time series plot. So this time I group by week of the year:
-
-```{r echo=FALSE, fig.width=10, fig.height=7, Univariate_Plots8}
+```{r echo=FALSE, fig.width=10, fig.height=7, cache=TRUE, Univariate_Plots8}
 
 # include week number for seasonal plot instead of date
 long_byweek <- gather(subset(incidences, select=-date), disease, incidence,
                       camp, ecol, ehec, giar, infl, noro, rota, salm, yers)
 
-# histogram of diseases
-pl <- function (inc) {
-  return(
-    qplot(data=subset(long_byweek, incidence>inc), x=week, 
-          geom="histogram", binwidth=1, color=disease,
-          main=paste("Diseases with Incidence > ", inc, sep="")) + 
-      guides(color = guide_legend(reverse = TRUE))
+# histogram of diseases over the weeks of the year
+pl <- function (inc, guide) {
+  return(ggplot(data=subset(long_byweek, incidence > inc),
+                aes(x=week, fill=disease)) +
+           geom_histogram(binwidth=1, col="gray18") +
+           ggtitle(paste("Seasonality of Diseases with Incidence > ", 
+                   inc, sep="")) + 
+           guides(color = guide_legend(reverse = TRUE))
   )
 }
 
-grid.arrange(pl(0), pl(5), pl(100), ncol=2)
+grid.arrange(pl(0, F), pl(1.5, T), pl(5, F), pl(100, T), ncol=2)
 ```
 
-Because the data is current (updated every Wednesday) I have to consider that values for December are still lower at this time. The numbers seem to show that the media attention that influenza usually gets should actually be on rotavirus and norovirus. Salmonella and campylobacter have a moderate high in summer, but much higher incidences can be seen for the two viruses in winter and spring.
+Because the data is current (updated every Wednesday) I have to consider that
+values for December are still lower at this time of the year. Salmonella and
+campylobacter have a moderate high in summer, but much higher incidences can be
+seen for noro- and rotavirus in winter and spring.
 
-Are there long-term trends? I resample the time series as quarterly and yearly values for the disease incidences in order to smooth:
+Are there long-term __trends__? I resample the time series as quarterly and 
+yearly values for the disease incidences:
 
 ```{r echo=FALSE, fig.width=10, fig.height=7, Univariate_Plots9}
 
-
-pl <- function (deltat) {
+pl <- function (deltat, title) {
   # resample and plot the time series for diseases
   
   # resample 
@@ -407,19 +502,26 @@ pl <- function (deltat) {
   # fix disease names (a little)
   colnames(w1ts) <- gsub(pattern="^.*/", replacement="", x=colnames(w1ts))
   # actually better than plotting colored lines as a time series plot would do
-  plot(w1ts, type="b", main="Resampled Disease Incidences")
+  plot(w1ts, type="b", main=paste("Resampled Disease Incidences,", title))
 }
 
-pl(0.25)
-pl(1)
+pl(0.25, "Quarterly")
+pl(1, "Annually")
 
 ```
 
-Norovirus is on the rise while rotavirus infections are declining. Immunization shots against rotavirus have been available since 2006 and became officially recommended (and paid for) in 2013. 
+Norovirus is on the rise while rotavirus infections are declining. Immunization
+shots against rotavirus have been available since 2006 and became officially
+recommended (and paid for) in 2013.
 
-I have to consider that these are the cases that were reported to the Robert Koch Institute. The inclination to report the incidents might be influenced by, for instance, the amount of paperwork required (2 pages) or the awareness or diagnostic capabilities of the doctors.
+I have to consider that these are the cases that were reported to the Robert
+Koch Institute. The inclination to report the incidents might be influenced by,
+for instance, the amount of paperwork required (2 pages) or the awareness or
+diagnostic capabilities of the doctors.
 
-I tried to find additional data sources about incidences of gastroenteritis from a health insurance. It contains the cases diagnosed as non-infectious gastroenteritis which caused sick leaves in the year 2005. That is the only year where data for memberships is available, so that I can approximate the incidence for the total population:
+I tried to find additional data sources about incidences of gastroenteritis from
+a health insurance. It contains the cases diagnosed as gastroenteritis which
+caused sick leaves in the years 2002-2008.
 
 ```{r echo=FALSE, fig.width=10, fig.height=5, Univariate_Plots10}
 # data for gastroenteritis of one health insurance (AOK) for the years 2002-2008
@@ -434,37 +536,55 @@ aok_inc <- aok_inc[-1, ]
 # extract yearly disease time series only
 w1 <- window.gts(gtsinc, deltat=1)
 w1ts <- aggts(w1, levels=c(0))
-# fix disease names (a little)
-# actually better than plotting colored lines as a time series plot would do
-plot(w1ts, type="l", main="Incidences", ylim = c(0, 7000))
+plot(w1ts, type="l", main="Incidences from different Sources", 
+     ylim = c(0, 7000))
 points(x = aok_inc$year, y = aok_inc[ , 7], type="b", pch=19, col="blue")
 points(x = aok_inc$year, y = aok_inc[ , 6], type="b", pch=19, col="green")
 legend("topright", c("AOK / sick leaves non-infect. gastroent.", 
                      "AOK / sick leaves infectious gastroent.",
-                     "RKI / infectious gastroenteritis only"), fill=c("blue", "green", "black") )  
+                     "RKI / infectious gastroenteritis only"), 
+       fill=c("blue", "green", "black") )  
 
 ```
 
-With the help of a doctor I found out that at least 80% of the cases have an infectious cause, which means I should see a yearly incidence of well above 10,000 in the RKI's data. The plotted values are much lower. I checked this against the yearly values through the institute's interface and noticed even much lower values (240-560) there. 
+With the help of a doctor I found out that at least 80% of the cases have an
+infectious cause, which means I should see a yearly incidence of well above
+3,000 in the RKI's data. The plotted values are much lower. I checked this
+against the yearly values through the institute's interface and noticed even
+much lower values (240-560) there.
 
-I think the reason for the different values is that some incidences are summed up when actually a mean should be calculated. For instance, an incidence of 4 in Region East and 6 in Region North does not mean a combined incidence of 10, but of 5. On the other hand, incidences for diseases and ages should be added. 
+I think the reason for the different values is that some incidences are summed
+up when actually a mean should be calculated. For instance, an incidence of 4 in
+Region East and 6 in Region North does not mean a combined incidence of 10, but
+of 5. On the other hand, incidences for diseases and ages should be added.
 
 I'll start over with separate values for cases and population.
 
-# Univariate Analysis
-## Iteration 2
+## 2.2 Analysis
+
 ### What is the structure of your dataset?
 
-The dataset contains 99,456 observations of 13 variables. For 777 weeks I have the incidence (as cases per 100,000) of nine not very rare infectious diseases, which are related to gastrointestinal symptoms, for patients grouped by age, gender and region of Germany. Again, the observations have been filled with zeros to help with time series analysis later on. A redundant column for the week of the year has been included. 
-The regions are North, East, South and West, all of which contain bigger cities and rural areas. Data with unclear gender was already omitted when downloading the data. The size of the dataset is approximately 6 MB. 
+The dataset contains 99,456 observations of 13 variables. For 777 weeks I have
+the incidence (as cases per 100,000) of nine not very rare infectious diseases,
+which are related to gastrointestinal symptoms, for patients grouped by age,
+gender and region of Germany. Again, the observations have been filled with
+zeros to help with time series analysis later on. A redundant column for the
+week of the year has been included. The regions are North, East, South and West,
+all of which contain bigger cities and rural areas. Data with unclear gender was
+already omitted when downloading the data. The size of the dataset is
+approximately 6 MB.
 
 ### What is/are the main feature(s) of interest in your dataset?
 
-I'd like to know, when a patient sees a doctor with gastrointestinal symptoms, what are the most likely infectious diseases to check. From a first look, gender does not seem to be very important, but age seems to make a difference. 
+I'd like to know, when a patient sees a doctor with gastrointestinal symptoms,
+what are the most likely infectious diseases to check. From a first look, gender
+does not seem to be very important, but age seems to make a difference.
 
 ### What other features in the dataset do you think will help support your investigation into your feature(s) of interest?
 
-I assume the region of the patient and the time of the year to be other important factors. My time series plots for validation hinted at these relationships. 
+I assume the region of the patient and the time of the year to be other
+important factors. My time series plots for validation hinted at these
+relationships.
 
 ### Did you create any new variables from existing variables in the dataset?
 
@@ -472,19 +592,26 @@ I temporarily created a variable for age with factor levels of equal width.
 
 ### Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? If so, why did you do this?
 
-As before, I had to combine several files into one. This time though, I shortened the names of factor levels to a fixed length to make use of the automatic grouping of the hts library.
+As before, I had to combine several files into one. This time though, I
+shortened the names of factor levels to a fixed length to make use of the
+automatic grouping of the hts library.
 
-# Univariate Plots Section
-## Iteration 3
+---
 
-This time I am going to calculate the incidence by myself, because the data source did not clearly document on which numbers they calculated it and they were not available for questions. First, I try to replicate the last plot:
+# Iteration 3
+
+## 3.1 Plots
+
+This time I am going to calculate the incidence by myself, because the data
+source did not clearly document on which numbers they calculated it and they
+were not available for questions. First, I try to replicate the last plot:
 
 ```{r eval = FALSE, echo=FALSE, message=FALSE, warning=FALSE, Load_the_Data4}
 # Load the Data
-####################################################################################
-#########  switch to eval = TRUE if you want to read 'raw' files again #############
-#########  otherwise see next chunk                                    #############
-####################################################################################
+################################################################################
+#########  switch to eval = TRUE if you want to read 'raw' files again #########
+#########  otherwise see next chunk                                    #########
+################################################################################
 
 #getwd()
 #setwd("R Scripts/p4")
@@ -591,12 +718,12 @@ write.csv(cases, file="cases.csv", row.names=F)
 
 ```
 
-```{r echo=FALSE, message=FALSE, warning=FALSE, Load_the_Data5}
+```{r echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE, Load_the_Data5}
 #getwd()
 #setwd("R Scripts/p4")
-####################################################################################
-#########  read data converted above                                   #############
-####################################################################################
+################################################################################
+#########  read data converted above                                   #########
+################################################################################
 
 # load prepared data
 cases <- read.csv("cases.csv")
@@ -650,7 +777,7 @@ remove(summed)
 ```
 
 
-```{r echo=FALSE, fig.width=10, fig.height=5, Univariate_Plots11}
+```{r echo=FALSE, fig.width=10, fig.height=5, cache=TRUE, Univariate_Plots11}
 
 calc_inc <- function (case_count, pop_count) {
   # Calculates incidence as cases per 100,000
@@ -691,7 +818,7 @@ The numbers now match the values I got from the data source. In a perfect world,
 
 This also means that I have to check the values of other plots I consider for my final plots. Here is the update for the long-term trends of diseases:
 
-```{r echo=FALSE, fig.width=10, fig.height=7, Univariate_Plots11a}
+```{r echo=FALSE, fig.width=10, fig.height=7, cache=TRUE, Univariate_Plots11a}
 
 annual_pop <- population %>%
   # population number over all ages
@@ -724,7 +851,7 @@ remove(inc_by_quarter_and_dis)
 
 I'd like to try out some forecasting models. I start with the package hts and use a TBATS model from packgage forecast. This model uses spectral analysis and exponential smoothing to fit the time series. 
 
-```{r echo=FALSE, fig.width=10, fig.height=5, Univariate_Plots12}
+```{r echo=FALSE, fig.width=10, fig.height=5, cache=TRUE, Univariate_Plots12}
 
 weekly_inc_by_dis <- cases %>%
   filter(disease %in% c("noro", "rota", "camp", "salm", "infl")) %>%
@@ -758,7 +885,7 @@ plot.ts(original)
 
 Next is package season, with which I fit a non-stationary cosinor model (sinusoid smoothing) to norovirus only. 
 
-```{r echo=FALSE, fig.width=10, fig.height=5, Univariate_Plots12a}
+```{r echo=FALSE, fig.width=10, fig.height=5, cache=TRUE, Univariate_Plots12a}
 
 weekly_inc_noro <- cases %>%
   filter(disease %in% c("noro")) %>%
@@ -795,7 +922,7 @@ plot(nsc$residuals)
 
 A frequently used library is forecast, which supplied the TBATS model for hts.  
 
-```{r echo=FALSE, fig.width=10, fig.height=5, Univariate_Plots12c}
+```{r echo=FALSE, fig.width=10, fig.height=5, cache=TRUE, Univariate_Plots12c}
 
 weekly_noro_ts <- ts(weekly_inc_by_dis$noro, frequency = 53, start = 2001)
 
@@ -812,7 +939,7 @@ plot(tb$errors)
 
 The models identify a seasonality, but the forecast confidence interval is rather large. I will stick with a simple plot:
 
-```{r echo=FALSE, fig.width=10, fig.height=5, Univariate_Plots13}
+```{r echo=FALSE, fig.width=10, fig.height=5, cache=TRUE, Univariate_Plots13}
 
 weekly_inc_by_dis <- cases %>%
   filter(disease %in% c("noro", "rota", "camp", "salm", "infl")) %>%
@@ -859,7 +986,7 @@ In terms of unusual distributions, when I look at the quarterly incidences, ther
 
 First, I revisit the disease distribution by age, only this time incidences are not counted but summed up. 
 
-```{r echo=FALSE, fig.width=10, fig.height=7, warning=FALSE, Bivariate_Plots1}
+```{r echo=FALSE, fig.width=10, fig.height=7, warning=FALSE, cache=TRUE, Bivariate_Plots1}
 
 mean_inc_by_age_dis <- cases %>%
   # first sum over all weeks
@@ -887,7 +1014,7 @@ ggplot(mean_inc_by_age_dis, aes(x = age, y = incidence, fill = disease)) +
 
 And as a windrose plot:
 
-```{r echo=FALSE, fig.width=10, fig.height=7, warning=FALSE, Bivariate_Plots3}
+```{r echo=FALSE, fig.width=10, fig.height=7, warning=FALSE, cache=TRUE, Bivariate_Plots3}
 
 ggplot(mean_inc_by_age_dis, aes(fill = age, y = incidence, x = disease)) +
   geom_bar(stat = "identity") +
@@ -899,7 +1026,7 @@ ggplot(mean_inc_by_age_dis, aes(fill = age, y = incidence, x = disease)) +
 
 And finally as dot size representing incidence, vaguely reminding of a violin plot:
 
-```{r echo=FALSE, fig.width=10, fig.height=7, warning=FALSE, Bivariate_Plots3a}
+```{r echo=FALSE, fig.width=10, fig.height=7, warning=FALSE, cache=TRUE, Bivariate_Plots3a}
 
 ggplot(mean_inc_by_age_dis, aes(x = age, size = incidence, y = disease, colour=disease)) +
   geom_point(stat = "identity", alpha=0.7) +
@@ -916,7 +1043,7 @@ I had not expected that the differences are that big. Again, I have to consider 
 
 All plots show that only 3 to 5 diseases seem to be responsible for the majority of cases, which is also something I wanted to investigate earlier in the univariate section. Here is the variability the monthly incidences of each disease in Germany for all ages.
 
-```{r echo=FALSE, fig.width=10, fig.height=7, Bivariate_Plots4}
+```{r echo=FALSE, fig.width=10, fig.height=7, cache=TRUE, Bivariate_Plots4}
 
 monthly_inc <- cases 
 # going to sum for months, so set all dates to the first of month
@@ -941,7 +1068,7 @@ Influenza has a low mean but quite a few outliers, up to 109. Together with the 
 
 Next, I'm going to explore how region and disease are related.
 
-```{r echo=FALSE, fig.width=10, fig.height=5, Bivariate_Plots5}
+```{r echo=FALSE, fig.width=10, fig.height=5, cache=TRUE, Bivariate_Plots5}
 
 annual_region_pop <- population %>%
   # population numbers for regions over all ages
@@ -978,7 +1105,7 @@ ggplot(mean_inc_by_reg_dis, aes(size = incidence, y = disease, x = region, color
 
 Region East shows higher incidences in both plots, maybe this is caused by an one-time event. Additionally, I can see the regional outbreak of EHEC in the east in 2011.
 
-```{r echo=FALSE, fig.width=10, fig.height=10, Bivariate_Plots6}
+```{r echo=FALSE, fig.width=10, fig.height=10, cache=TRUE, Bivariate_Plots6}
 
 monthly_inc <- cases 
 # going to sum for months, so set all dates to the first of month
@@ -1038,7 +1165,7 @@ remove(monthly_inc, monthly_inc_rest, monthly_inc_east, monthly_inc_diff)
 
 The upper plots show incidences in the east and the rest, the lower plot the difference between them. Region East has higher incidences for all diseases in almost every single month. Are doctors there more eager to report or is this caused by the age structure?
 
-```{r echo=FALSE, fig.width=10, fig.height=3, Bivariate_Plots7}
+```{r echo=FALSE, fig.width=10, fig.height=3, cache=TRUE, Bivariate_Plots7}
 
 pop_east_rest <- population %>%
   filter(year == 2014) %>%
@@ -1078,7 +1205,7 @@ I think the time of the year has the strongest influence on incidence, but I am 
 
 # Multivariate Plots Section
 
-```{r echo=FALSE, fig.width=10, fig.height=10, Multivariate_Plots}
+```{r echo=FALSE, fig.width=10, fig.height=10, cache=TRUE, Multivariate_Plots}
 
 theme_set(theme_few())
 
@@ -1132,7 +1259,7 @@ For rotavirus, there is a rather big deviation for all ages and years in region 
 
 After the exploration of age/ region/ disease is exhausted, I will have a look at the seasonality again. 
 
-```{r echo=FALSE, fig.width=10, fig.height=8, Multivariate_Plots2}
+```{r echo=FALSE, fig.width=10, fig.height=8, cache=TRUE, Multivariate_Plots2}
 
 inc_by_dis <- cases %>%
   filter(disease %in% c("noro", "rota", "camp", "salm", "infl")) %>%
@@ -1171,7 +1298,7 @@ remove(p1, p2, p3, p4, p5)
 
 The seasonality, which showed in the plot of the annual means above, is still there, but there are some changes over time. When I forecast noro- or rotavirus later, I will limit the data to years from 2008: 
 
-```{r echo=FALSE, fig.width=10, fig.height=4, Multivariate_Plots2a}
+```{r echo=FALSE, fig.width=10, fig.height=4, cache=TRUE, Multivariate_Plots2a}
 
 plcpt <- function(disease) {
   # Plots the changepoints (by mean) for a disease
@@ -1187,7 +1314,7 @@ remove(inc_by_dis)
 
 Norovirus has high incidences in small kids and older people. Maybe the seasonality varies with age for norovirus.
 
-```{r echo=FALSE, fig.width=10, fig.height=10, Multivariate_Plots3}
+```{r echo=FALSE, fig.width=10, fig.height=10, cache=TRUE, Multivariate_Plots3}
 
 inc_norocamp_age_dis <- cases %>%
   filter(disease %in% c("noro", "camp")) %>%
@@ -1238,7 +1365,7 @@ pld("noro")
 
 What is the pattern for campylobacter?
 
-```{r echo=FALSE, fig.width=10, fig.height=10, Multivariate_Plots3a}
+```{r echo=FALSE, fig.width=10, fig.height=10, cache=TRUE, Multivariate_Plots3a}
 pld("camp")
 
 remove(inc_norocamp_age_dis)
@@ -1248,7 +1375,7 @@ While the seasonal pattern is similar within the age groups (columns), it looks 
 
 Before I try a forecast, I have a look at the seasonality of some diseases by ages and regions:
 
-```{r echo=FALSE, fig.width=10, fig.height=5, Multivariate_Plots4}
+```{r echo=FALSE, fig.width=10, fig.height=5, cache=TRUE, Multivariate_Plots4}
 
 inc_by_age_wk_dis <- cases %>%
   #filter(disease %in% c("noro", "rota", "camp", "salm", "infl")) %>%
@@ -1301,7 +1428,7 @@ There is no real difference between the regions. The diseases seem to hit all ag
 
 With the new insights I try to forecast some incidences again:
 
-```{r echo=FALSE, fig.width=10, fig.height=4, Multivariate_Plots5}
+```{r echo=FALSE, fig.width=10, fig.height=4, cache=TRUE, Multivariate_Plots5}
 
 weekly_inc_by_dis_ag <- cases %>%
   filter(disease %in% c("noro", "rota", "camp", "salm", "infl")) %>%
@@ -1405,7 +1532,7 @@ theme_set(theme_few())
 
 ### Plot One
 
-```{r echo=FALSE, fig.width=10, fig.height=4, Plot_One}
+```{r echo=FALSE, fig.width=10, fig.height=4, cache=TRUE, Plot_One}
 mean_inc_by_age_dis <- cases %>%
   filter(disease %in% c("noro", "rota", "camp", "salm", "infl")) %>%
   # first sum over all weeks
@@ -1444,7 +1571,7 @@ The plot shows the mean annual incidence of the top five diseases for the age of
 
 ### Plot Two
 
-```{r echo=FALSE, fig.width=10, fig.height=5, Plot_Two}
+```{r echo=FALSE, fig.width=10, fig.height=5, cache=TRUE, Plot_Two}
 weekly_inc_by_dis <- cases %>%
   filter(disease %in% c("noro", "rota", "camp", "salm")) %>%
   # interested in week number only
@@ -1487,7 +1614,7 @@ These three plots show the incidence of four diseases during the course of the y
 
 ### Plot Three
 
-```{r echo=FALSE, fig.width=10, fig.height=3, Plot_Three}
+```{r echo=FALSE, fig.width=10, fig.height=3, cache=TRUE, Plot_Three}
 
 tb <- function (disease, title) {
   # Plots forecast for a disease
