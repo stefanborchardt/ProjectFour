@@ -427,10 +427,10 @@ on equidistant breaks on log scale:
 ```{r echo=FALSE, fig.width=10, fig.height=4, warning=FALSE, cache=TRUE, Univariate_Plots5}
 
 # histograms of incidences
-qplot(data=long_inc, x=incidence, geom="histogram", binwidth=0.3, 
+qplot(data=long_inc_nz, x=incidence, geom="histogram", binwidth=0.3, 
       main="Histogram of Incidences")
 # trying to space breaks evenly
-ggplot(data=long_inc, aes(x=incidence)) + geom_histogram(binwidth=0.3) +
+ggplot(data=long_inc_nz, aes(x=incidence)) + geom_histogram(binwidth=0.3) +
   scale_x_log10(breaks=c(rev(round(exp(-seq(from=0.1, to=5, length.out=10)), 
                                    digits=2)),
                          round(exp(seq(from=0.5, to=6, length.out=10)), 
@@ -442,13 +442,13 @@ ggplot(data=long_inc, aes(x=incidence)) + geom_histogram(binwidth=0.3) +
 disease) are around 1.5 cases per 100,000 people, it seems. 
 
 ```{r echo=FALSE, fig.width=10, fig.height=5, message=FALSE, Univariate_Plots5a}
-summary(long_inc$incidence)
+summary(long_inc_nz$incidence)
 ```
 
 It is hard to compare regions by number of disease occurences, so how are the
 incidences distributed between the regions?
 
-```{r echo=FALSE, fig.width=10, fig.height=7, cache=TRUE, warning=FALSE, Univariate_Plots6}
+```{r echo=FALSE, fig.width=10, fig.height=5, cache=TRUE, warning=FALSE, Univariate_Plots6}
 
 qplot(data = long_inc_nz, x = region, y = incidence, geom = "boxplot", 
       fill = region, main = "Boxplot of Weekly Disease Incidences, Zoomed In") +
@@ -510,9 +510,10 @@ pl(1, "Annually")
 
 ```
 
-Norovirus is on the rise while rotavirus infections are declining. Immunization
-shots against rotavirus have been available since 2006 and became officially
-recommended (and paid for) in 2013.
+From the plots it seems as if Norovirus is on the rise while rotavirus 
+infections are declining. Immunization shots against rotavirus have been 
+available since 2006 and became officially recommended (and paid for) in 2013. I
+will have a look into the long-term trends in more detail later. 
 
 I have to consider that these are the cases that were reported to the Robert
 Koch Institute. The inclination to report the incidents might be influenced by,
@@ -604,7 +605,7 @@ automatic grouping of the hts library.
 
 This time I am going to calculate the incidence by myself, because the data
 source did not clearly document on which numbers they calculated it and they
-were not available for questions. First, I try to replicate the last plot:
+were not available for questions.
 
 ```{r eval = FALSE, echo=FALSE, message=FALSE, warning=FALSE, Load_the_Data4}
 # Load the Data
@@ -628,7 +629,8 @@ read_bind <- function (region, disease, to_bind) {
   #   read (and bound) data frame    
 
   # read tab-delimited CSV containing nuls
-  filename <- paste(paste(paste("i3", region,  sep="\\"), disease, sep="\\"), "csv", sep=".")
+  filename <- paste(paste(paste("i3", region,  sep="\\"), disease, sep="\\"), 
+                    "csv", sep=".")
   rd <- read.delim2(filename, skipNul = T, skip = 1)
   
   rd$disease <- disease
@@ -742,7 +744,8 @@ population <- population %>%
   mutate(e = Berlin + Brandenburg + Sachsen + Sachsen.Anhalt + Thüringen) %>%
   mutate(s = Baden.Württemberg + Bayern) %>%
   mutate(w = Hessen + Nordrhein.Westfalen + Rheinland.Pfalz + Saarland) %>%
-  # only need the year, using population of e.g. 31/12/2000 for the years 2000 and 2001
+  # only need the year, using population of e.g. 31/12/2000 for the years 2000 
+  # and 2001
   mutate(year = as.integer(substr(as.character(population$date), 7, 10))) %>%
   # only keep relevant columns
   dplyr::select(year, age, n, e , s, w) %>%
@@ -776,6 +779,17 @@ remove(summed)
 
 ```
 
+Instead of the incidence there is now a case count. To calculate the incidence
+population year is included to match with population data. The data contains age
+as a number now instead of age groups. The date is supplemented by the week of
+the year.
+
+```{r echo=FALSE, cache=TRUE, Univariate_Plots11a}
+str(cases)
+summary(cases)
+```
+
+First, I try to replicate the last plot:
 
 ```{r echo=FALSE, fig.width=10, fig.height=5, cache=TRUE, Univariate_Plots11}
 
@@ -785,7 +799,7 @@ calc_inc <- function (case_count, pop_count) {
   #   case_count - the case count
   #   pop_count - the population count
   # Returns:
-  #   incidence, rounded to .1
+  #   incidence, rounded to .01
   return(round(case_count * 100000 / pop_count, digits = 2))
 } 
 
@@ -795,7 +809,8 @@ inc_by_year <- cases %>%
   group_by(date, pop_year, age, region) %>%
   summarise(annual_dis_cases = sum(case_count)) %>%
   # second join with population data
-  left_join(population, by = c("pop_year" = "year", "age" = "age", "region" = "region")) %>%
+  left_join(population, by = c("pop_year" = "year", "age" = "age", 
+                               "region" = "region")) %>%
   dplyr::select(- pop_year) %>%
   # third sum over ages and regions
   group_by(date) %>%
@@ -803,22 +818,28 @@ inc_by_year <- cases %>%
   # fourth calculate incidence
   mutate(incidence = calc_inc(annual_cases, annual_pop))
 
-plot(inc_by_year$date, inc_by_year$incidence, type="l", main="Incidences", ylim = c(0, 7000))
+plot(inc_by_year$date, inc_by_year$incidence, type="l", 
+     main="Incidences from different Sources, Self-Calculated", 
+     ylim = c(0, 7000))
 points(x = aok_inc$year, y = aok_inc[ , 7], type="b", pch=19, col="blue")
 points(x = aok_inc$year, y = aok_inc[ , 6], type="b", pch=19, col="green")
 legend("topright", c("AOK / sick leaves non-infect. gastroent.", 
                      "AOK / sick leaves infectious gastroent.",
-                     "RKI / infectious gastroenteritis only"), fill=c("blue", "green", "black") ) 
+                     "RKI / infectious gastroenteritis only"), 
+       fill=c("blue", "green", "black") ) 
 
 remove(aok_inc)
-str(cases)
 ```
 
-The numbers now match the values I got from the data source. In a perfect world, the green and black lines would be much higher than the blue line.
+The numbers now match the values I got from the data source. In a perfect world,
+the green and black lines would be much higher than the blue line.
 
-This also means that I have to check the values of other plots I consider for my final plots. Here is the update for the long-term trends of diseases:
+### 3.1.1 Disease Incidences vs. Time
 
-```{r echo=FALSE, fig.width=10, fig.height=7, cache=TRUE, Univariate_Plots11a}
+This also means that I have to check the values of other plots I consider for my
+final plots. Here is the update for the long-term trends of diseases:
+
+```{r echo=FALSE, fig.width=10, fig.height=7, cache=TRUE, message=FALSE, Univariate_Plots11d}
 
 annual_pop <- population %>%
   # population number over all ages
@@ -846,12 +867,11 @@ ts_by_q_and_dis <- ts(subset(wide_inc_by_q_and_dis, select=-date),
 plot(ts_by_q_and_dis, type="b", main="Quarterly Incidences")
 
 remove(inc_by_quarter_and_dis)
-
 ```
 
-I'd like to try out some forecasting models. I start with the package hts and use a TBATS model from packgage forecast. This model uses spectral analysis and exponential smoothing to fit the time series. 
+Let's see how a linear model performs for some diseases.
 
-```{r echo=FALSE, fig.width=10, fig.height=5, cache=TRUE, Univariate_Plots12}
+```{r echo=FALSE, fig.width=10, fig.height=3, cache=TRUE, message=FALSE, Univariate_Plots11b}
 
 weekly_inc_by_dis <- cases %>%
   filter(disease %in% c("noro", "rota", "camp", "salm", "infl")) %>%
@@ -868,24 +888,120 @@ weekly_inc_by_dis <- cases %>%
   ungroup() %>%
   dplyr::select(- starts_with("mean")) %>%
   # need wide format for time series
-  dcast(date ~ disease) %>%
-  dplyr::select( - date)
+  dcast(date ~ disease) 
 
-# create grouped time series                          
+theme_set(theme_few())
+
+plot_lin <- function (disease) {
+  # fits and plots linear model for one disease
+  # plots residuals vs. fitted values 
+  # including linear regression line
+  
+  # convert to data frame
+  dis_ts <- data.frame(x=time(weekly_inc_by_dis$date), 
+                       y=weekly_inc_by_dis[ , disease]) 
+  # linear model without season
+  dis_fit <- lm(dis_ts$y ~ dis_ts$x) #tslm(dis_ts ~ trend)
+  coef <- dis_fit$coefficients
+  # plot linear fit
+  p1 <- ggplot(dis_ts, aes(x=x, y=y)) + 
+    geom_line() +
+    geom_abline(intercept = coef[1], slope = coef[2], col="red") # +
+    labs(x="Time", y="Incidence")
+  # plot residuals vs. fitted
+  df <- data.frame(x=fitted(dis_fit), y=residuals(dis_fit))
+  coef <- lm(df$y ~ df$x)$coefficients
+  p2<- ggplot(df, aes(x=x, y=y)) + 
+    geom_point(alpha = I(0.2), shape=16, fill="black") + 
+    geom_hline(yintercept = 0) +
+    geom_abline(intercept = coef[1], slope = coef[2], col = "red") +
+    labs(x="Fitted Values", y="Residuals")
+  grid.arrange(p1, p2, top=paste("Linear Fit", disease, sep=": "), ncol=2)
+}
+
+plot_lin("noro")
+plot_lin("camp")
+plot_lin("infl")
+
+```
+
+<a name="res_lin_sum"/>Numerical values for norovirus:
+
+```{r echo=FALSE, fig.width=10, fig.height=3, cache=TRUE, error=FALSE, Univariate_Plots11e}
+# numerical summary of residuals
+noro_ts <- ts(weekly_inc_by_dis$noro, frequency = 52, start = 2001)
+linear <- tslm(noro_ts ~ trend)
+summary(residuals(linear))
+
+```
+
+This is rather disappointing, especially the seasonality stays unexplained. I
+will try a seasonal decomposition based on linear smoothing, on the
+example of norovirus:
+
+```{r echo=FALSE, fig.width=10, fig.height=7, cache=TRUE, message=FALSE, Univariate_Plots11c}
+# decomposition with loess
+noro_stl <- stl(noro_ts, s.window = "periodic")
+autoplot(noro_stl)
+summary(noro_stl)
+
+```
+
+The remainder still shows a seasonality, but values are much better than
+[without seasonality](#res_lin_sum). I'd like to try out some forecasting models
+to obtain more insights into seasonality and trend. I start with the package
+`hts` and use a TBATS model from packgage `forecast`. This model uses spectral
+analysis and exponential smoothing to fit the time series.
+
+```{r echo=FALSE, fig.width=10, fig.height=6, cache=TRUE, message=FALSE, warning=FALSE, Univariate_Plots12}
+
+# create grouped time series    
+weekly_inc_by_dis <- dplyr::select(weekly_inc_by_dis, - date)
 gts_weekly_by_dis <- gts(ts(weekly_inc_by_dis, frequency = 53, start = 2001))
 # forecast and plot from hts
 fc <- forecast(gts_weekly_by_dis, h = 200, method = "bu",
                   keep.fitted = T, keep.resid = T,
                   FUN = function(x) tbats(x))
-plot(fc, level=c(1))
-plot(fitted(fc))
-original <- aggts(fc, forecasts = F, level= c(1))
-plot.ts(original)
+fc_by_dis <- aggts(fc, levels = c(1))
+autoplot(fc_by_dis) + ggtitle("Predicted Incidences of Diseases")
+
+theme_set((theme_few()))
+
+res_fit_plot_d <- function (disease) {
+  # plots residuals vs. fitted values for one disease
+  # including linear regression line
+  df <- data.frame(x=fc$fitted[ , disease], y=fc$residuals[ , disease])
+  coef <- lm(df$y ~ df$x)$coefficients
+  return(ggplot(df, aes(x=x, y=y)) + 
+           geom_point(alpha = I(0.15), shape=16, fill="black") + 
+           geom_hline(yintercept = 0) +
+           geom_abline(intercept = coef[1], slope = coef[2], col = "red") +
+           labs(x=paste("Fitted Values", disease, sep=": "), y="Residuals")
+         )
+}
+#plot residuals vs fitted values
+p1 <- res_fit_plot_d("camp")
+p2 <- res_fit_plot_d("noro")
+p3 <- res_fit_plot_d("infl")
+p4 <- res_fit_plot_d("rota")
+p5 <- res_fit_plot_d("salm")
+grid.arrange(p1, p2, p3, p4, p5, ncol=2, 
+             top="Residuals vs. Fitted Values with Regression Line")
 ```
 
-Next is package season, with which I fit a non-stationary cosinor model (sinusoid smoothing) to norovirus only. 
+<a name="res_summary"/>This model clearly incorporated the seasonality. Here are
+the numeric values for the residuals of norovirus:
 
-```{r echo=FALSE, fig.width=10, fig.height=5, cache=TRUE, Univariate_Plots12a}
+```{r echo=FALSE, Univariate_Plots12e}
+
+summary(fc$residuals[ , "noro"])
+
+```
+
+Next is package `season`, with which I fit a non-stationary cosinor model 
+(sinusoid smoothing) to norovirus only.
+
+```{r echo=FALSE, fig.width=10, fig.height=5, cache=TRUE, fig.keep="last", message=FALSE, error=FALSE, warning=FALSE, results="hide", Univariate_Plots12a}
 
 weekly_inc_noro <- cases %>%
   filter(disease %in% c("noro")) %>%
@@ -906,21 +1022,40 @@ weekly_inc_noro <- cases %>%
 
 # somehow this makes it work....
 weekly_inc_noro1 <- data.frame(weekly_inc_noro)
-# very few iterations 
+# few iterations 
 nsc <- nscosinor(data = weekly_inc_noro1, response = "incidence", 
-          cycles = c(52), niters=100, burnin=50, 
+          cycles = c(52), niters=200, burnin=100, 
           tau=c(7,40), lambda=1/52, monthly=F)
-# plots twice in knitr
 plot(nsc)
 ```
 
 ```{r echo=FALSE, fig.width=10, fig.height=3, Univariate_Plots12b}
-plot(nsc$fitted.values$mean)
-plot(nsc$residuals)
 
+theme_set(theme_few())
+
+res_fit_plot <- function (data, title) {
+  # plot residuals vs fitted
+  # including linear regression line
+  coef <- lm(data$y ~ data$x)$coefficients
+  ggplot(data, aes(x=x, y=y)) +
+    geom_point(alpha = I(0.2), shape=16, fill="black") + 
+    geom_hline(yintercept = 0) +
+    geom_abline(intercept = coef[1], slope = coef[2], col = "red") +
+    labs(x="Fitted Values", y="Residuals", 
+         title=paste(title, 
+                     "Residuals vs. Fit for Norovirus", sep=": "))
+}
+
+res_fit_plot(data.frame(x=nsc$fitted.values$mean, y=nsc$residuals),
+             "NS-Cosinor")
+
+summary(nsc$residuals)
 ```
 
-A frequently used library is forecast, which supplied the TBATS model for hts.  
+Compared to [hts/ TBATS](#res_summary), the residuals are higher. 
+
+The frequently used library `forecast` has been mentioned before. When used
+directly, it allows access to more details:
 
 ```{r echo=FALSE, fig.width=10, fig.height=5, cache=TRUE, Univariate_Plots12c}
 
@@ -930,16 +1065,32 @@ tb <- tbats(weekly_noro_ts)
 plot(tbats.components(tb))
 ```
 
-```{r echo=FALSE, fig.width=10, fig.height=3, Univariate_Plots12d}
+This means that it was determined 
+<ul>
+<li>not to transform the data using the Box-Cox funtion</li>
+<li>use an ARMA(3, 4) process for error modeling, which means</li>
+<ul>
+<li>autoregression of order 3 and</li>
+<li>moving average of order 4</li>
+</ul>
+<li>to model the seasonality of 53 weeks with 5 Fourier terms.</li>
+</ul>
+
+```{r echo=FALSE, fig.width=10, fig.height=3, message=FALSE, Univariate_Plots12d}
 plot(forecast(tb, h=200))
-plot(fitted.values(tb))
-plot(tb$errors)
+
+res_fit_plot(data.frame(x=fitted.values(tb), y=tb$errors), "TBATS")
+
+summary(tb$errors)
 
 ```
 
-The models identify a seasonality, but the forecast confidence interval is rather large. I will stick with a simple plot:
+The numerical summary shows identical values as [above](#res_summary).
 
-```{r echo=FALSE, fig.width=10, fig.height=5, cache=TRUE, Univariate_Plots13}
+The models identify a seasonality, but the forecast confidence interval is
+rather large. I will stick with a simple plot:
+
+```{r echo=FALSE, fig.width=10, fig.height=5, cache=TRUE, warning=FALSE, Univariate_Plots13}
 
 weekly_inc_by_dis <- cases %>%
   filter(disease %in% c("noro", "rota", "camp", "salm", "infl")) %>%
@@ -962,38 +1113,23 @@ ggplot(weekly_inc_by_dis, aes(x = week, y = incidence, fill = disease)) +
 
 ```
 
-This is going to be a final plot.
+This is going to be a final plot. because it allows to easily see the highest
+incidences for a time of the year.
 
-# Univariate Analysis
-## Iteration 3
-### What is the structure of your dataset?
+### 3.1.2 Disease Incidence vs. Age
 
-The dataset consists of two parts. To compute the incidences on my own, I downloaded the population data of the German states from https://www-genesis.destatis.de/genesis/online/link/tabellen/12411-0011 . There are limitations on the size of data you can obtain for free, so it is only biennial. Initially, this first part of the data contained 736 obs. of 18 variables, but I reduced it to 648 obs. of 6 variables by summing values for regions and ages 80+.
+I revisit the disease distribution by age, only this time incidences are not
+only counted but summed up.
 
-The second part contains 2,283,228 observations of 7 variables. For 778 weeks I have the case counts of nine not very rare infectious diseases, which are related to gastrointestinal symptoms, for patients grouped by age and region of Germany. Two redundant columns for the week of the year and the year to match with the population data have been included. The size of this dataset is approximately 80 MB. 
-
-### Did you create any new variables from existing variables in the dataset?
-
-The incidence was calculated, often per plot, to ensure the right case and population counts are matched against each other.
-
-### Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? If so, why did you do this?
-
-To give an example, the age was included in the form "6 year olds" or "over 90 year olds" in the population data. I had to extract the numeric value and, because the disease data grouped everyone over 80 together, had to sum all ages above 80. Additionally, I had to sum the values for the various states of Germany to obtain population numbers for the regions.
-
-In terms of unusual distributions, when I look at the quarterly incidences, there is a spike in EHEC diseases and E.Coli drops to 0 in 2015.
-
-# Bivariate Plots Section
-
-First, I revisit the disease distribution by age, only this time incidences are not counted but summed up. 
-
-```{r echo=FALSE, fig.width=10, fig.height=7, warning=FALSE, cache=TRUE, Bivariate_Plots1}
+```{r echo=FALSE, fig.width=10, fig.height=5, warning=FALSE, cache=TRUE, Bivariate_Plots1}
 
 mean_inc_by_age_dis <- cases %>%
   # first sum over all weeks
   group_by(pop_year, age, region, disease) %>%
   summarise(date_cases = sum(case_count)) %>%
   # second join with population data
-  left_join(population, by = c("pop_year" = "year", "age" = "age", "region" = "region")) %>%
+  left_join(population, 
+            by = c("pop_year" = "year", "age" = "age", "region" = "region")) %>%
   # third sum over regions
   group_by(pop_year, age, disease) %>%
   summarise(region_cases = sum(date_cases), all_pop=sum(pop_count)) %>%
@@ -1004,46 +1140,65 @@ mean_inc_by_age_dis <- cases %>%
   mutate(incidence = calc_inc(annual_cases, mean_pop)) %>%
   ungroup()
 
-theme_set(theme_few())
-
 ggplot(mean_inc_by_age_dis, aes(x = age, y = incidence, fill = disease)) +
   geom_area(stat = "identity", position = "stack", colour="black") +
   guides(fill = guide_legend(reverse = TRUE)) +
   scale_x_continuous(breaks=seq(0, 80, by=5)) 
 ```
 
-And as a windrose plot:
+As a bar plot with color indicating the age distribution:
 
-```{r echo=FALSE, fig.width=10, fig.height=7, warning=FALSE, cache=TRUE, Bivariate_Plots3}
+```{r echo=FALSE, fig.width=10, fig.height=5, warning=FALSE, cache=TRUE, Bivariate_Plots3}
 
 ggplot(mean_inc_by_age_dis, aes(fill = age, y = incidence, x = disease)) +
   geom_bar(stat = "identity") +
-  coord_polar(start = - 2.3 * pi / 4) +
   scale_fill_gradientn(colours = diverge_hcl(81)) + 
-  scale_x_discrete(limits = c("infl", "noro", "rota", "camp", "salm", "ecol", "ehec", "giar", "yers"))
+  scale_x_discrete(limits = c("infl", "noro", "rota", "camp", 
+                              "salm", "ecol", "ehec", "giar", "yers"))
 
 ```
 
-And finally as dot size representing incidence, vaguely reminding of a violin plot:
+And finally as dot area size representing incidence, original and scaled:
 
-```{r echo=FALSE, fig.width=10, fig.height=7, warning=FALSE, cache=TRUE, Bivariate_Plots3a}
+```{r echo=FALSE, fig.width=10, fig.height=5, warning=FALSE, cache=TRUE, Bivariate_Plots3a}
 
-ggplot(mean_inc_by_age_dis, aes(x = age, size = incidence, y = disease, colour=disease)) +
+ggplot(mean_inc_by_age_dis, 
+       aes(x = age, size = incidence, y = disease, colour=disease)) +
   geom_point(stat = "identity", alpha=0.7) +
   scale_colour_manual(values = rainbow_hcl(9)) +
-  scale_size_continuous(range=c(0.1, 12)) +
-  scale_y_discrete(limits = c("infl", "noro", "rota", "camp", "salm", "ecol", "ehec", "giar", "yers"))
+  scale_size_area(max_size = 6) +
+  scale_y_discrete(limits = c("infl", "noro", "rota", "camp", 
+                              "salm", "ecol", "ehec", "giar", "yers"))
+
+ggplot(mean_inc_by_age_dis, 
+       aes(x = age, size = sqrt(incidence), y = disease, colour=disease)) +
+  geom_point(stat = "identity", alpha=0.7) +
+  scale_colour_manual(values = rainbow_hcl(9)) +
+  scale_size_area(max_size = 4) +
+  scale_y_discrete(limits = c("infl", "noro", "rota", "camp", 
+                              "salm", "ecol", "ehec", "giar", "yers"))
+
 
 remove(mean_inc_by_age_dis)
 ```
 
-I think the difference between campylobacter, norovirus and salmonella on the one hand and rotavirus on the other are much clearer if plotted this way. This could be the basis for a final plot.
+I think the difference between campylobacter, norovirus and salmonella on the 
+one hand and rotavirus on the other is much clearer in the first of these plots.
+This could be the basis for a final plot.
 
-I had not expected that the differences are that big. Again, I have to consider that the data contains reported cases, maybe adults just do not see a doctor when they have the syptoms. 
+I had not expected that the differences are that big. Again, I have to consider 
+that the data contains reported cases, maybe adults just do not see a doctor 
+when they have the syptoms.
 
-All plots show that only 3 to 5 diseases seem to be responsible for the majority of cases, which is also something I wanted to investigate earlier in the univariate section. Here is the variability the monthly incidences of each disease in Germany for all ages.
+All plots show that only 3 to 5 diseases seem to be responsible for the majority
+of cases, which is also something I wanted to investigate earlier section.
 
-```{r echo=FALSE, fig.width=10, fig.height=7, cache=TRUE, Bivariate_Plots4}
+### 3.1.3 Disease Incidences vs. Time Revisited
+
+Here is the variability the monthly incidences of each disease in Germany for
+all ages.
+
+```{r echo=FALSE, fig.width=10, fig.height=7, cache=TRUE, warning=FALSE, Bivariate_Plots4}
 
 monthly_inc <- cases 
 # going to sum for months, so set all dates to the first of month
@@ -1058,17 +1213,22 @@ monthly_inc <- monthly_inc %>%
 
 # boxplot of diseases
 qplot(data=monthly_inc, x=disease, y=incidence,
-      geom="boxplot", fill=disease, main="Boxplot of Monthly Disease Incidences, Zoomed In") + 
+      geom="boxplot", fill=disease, 
+      main="Boxplot of Monthly Disease Incidences, Zoomed In") + 
   guides(fill=FALSE) +
   ylim(0, 25)
 
 ```
 
-Influenza has a low mean but quite a few outliers, up to 109. Together with the long-term plots from above I conclude that influenza has a rather short season, while rota- and norovirus stay for a longer time of the year.
+Influenza has a low mean but quite a few outliers, up to 109. Together with the
+long-term plots from above I conclude that influenza has a rather short season,
+while rota- and norovirus stay for a longer time of the year.
+
+### 3.1.4 Disease Icidences vs Region
 
 Next, I'm going to explore how region and disease are related.
 
-```{r echo=FALSE, fig.width=10, fig.height=5, cache=TRUE, Bivariate_Plots5}
+```{r echo=FALSE, fig.width=10, fig.height=5, cache=TRUE, warning=FALSE, Bivariate_Plots5}
 
 annual_region_pop <- population %>%
   # population numbers for regions over all ages
@@ -1081,20 +1241,31 @@ mean_inc_by_reg_dis <- cases %>%
   group_by(pop_year, region, disease) %>%
   summarise(biennal_cases = sum(case_count)) %>%
   # second join with population data
-  left_join(annual_region_pop, by = c("pop_year" = "year", "region" = "region")) %>%
+  left_join(annual_region_pop, 
+            by = c("pop_year" = "year", "region" = "region")) %>%
   # third sum over years
   group_by(region, disease) %>%
   summarise(region_cases = mean(biennal_cases), mean_pop=mean(pop)) %>%
   # fourth calculate incidence per 100,000 and round to .1
   mutate(incidence = calc_inc(region_cases, mean_pop)) 
 
-ggplot(mean_inc_by_reg_dis, aes(fill = disease, y = incidence, x = region)) +
+ggplot(mean_inc_by_reg_dis, aes(fill = disease, y = incidence, x = region)) + 
+  ggtitle("Incidences by Region") +
   geom_bar(stat = "identity", colour = "black") +
   coord_polar(start = - pi / 4) +
   scale_fill_manual(values = rainbow_hcl(9)) + 
   scale_x_discrete(limits = c("n", "e", "s", "w"))
 
-ggplot(mean_inc_by_reg_dis, aes(size = incidence, y = disease, x = region, color=disease)) +
+```
+
+The regions are aligned to a windrose for a more intuitive understanding.
+Because the values are proportionate to the petal radius, differences seem
+exaggerated.
+
+```{r echo=FALSE, fig.width=10, fig.height=5, cache=TRUE, Bivariate_Plots5a}
+
+ggplot(mean_inc_by_reg_dis, 
+       aes(size = incidence, y = disease, x = region, color=disease)) +
   geom_point(stat = "identity") +
   scale_fill_manual(values = rainbow_hcl(9)) + 
   scale_x_discrete(limits = c("n", "e", "s", "w")) + 
@@ -1103,7 +1274,8 @@ ggplot(mean_inc_by_reg_dis, aes(size = incidence, y = disease, x = region, color
 
 ```
 
-Region East shows higher incidences in both plots, maybe this is caused by an one-time event. Additionally, I can see the regional outbreak of EHEC in the east in 2011.
+Region East shows higher incidences in both plots, maybe this is caused by an
+one-time event. 
 
 ```{r echo=FALSE, fig.width=10, fig.height=10, cache=TRUE, Bivariate_Plots6}
 
@@ -1117,7 +1289,8 @@ monthly_inc_east <- monthly_inc %>%
   group_by(date, pop_year, region, disease) %>%
   summarize(month_cases = sum(case_count)) %>%
   # calculate incidence
-  left_join(annual_region_pop, by = c("pop_year" = "year", "region" = "region" )) %>%
+  left_join(annual_region_pop, 
+            by = c("pop_year" = "year", "region" = "region" )) %>%
   mutate(incidence = calc_inc(month_cases, pop)) %>%
   ungroup() %>%
   mutate(disease = as.character(disease)) %>%
@@ -1129,7 +1302,8 @@ monthly_inc_rest <- monthly_inc %>%
   group_by(date, pop_year, region, disease) %>%
   summarize(month_cases = sum(case_count)) %>%
   # calculate incidence
-  left_join(annual_region_pop, by = c("pop_year" = "year", "region" = "region" )) %>%
+  left_join(annual_region_pop, 
+            by = c("pop_year" = "year", "region" = "region" )) %>%
   # sum over regions
   group_by(date, disease) %>%
   summarise(rest_cases = sum(month_cases), rest_pop=sum(pop)) %>%
@@ -1138,22 +1312,27 @@ monthly_inc_rest <- monthly_inc %>%
   mutate(disease = as.character(disease)) %>%
   dplyr::select(date, disease, incidence)
 
-p1 <- ggplot(monthly_inc_east, aes(x = date, y = incidence, fill = disease),  title = "Monthly Incidences in Region East") +
+p1 <- ggplot(monthly_inc_east, aes(x = date, y = incidence, fill = disease)) +  
+  ggtitle("Monthly Incidences in Region East") +
   geom_area(position = "identity", alpha=.2, colour="black", size=.7) +
   ylim(0, 120) + 
   guides(fill=FALSE)
 
-p2 <- ggplot(monthly_inc_rest, aes(x = date, y = incidence, fill = disease), main = "Monthly Incidences in Other Regions") +
+p2 <- ggplot(monthly_inc_rest, aes(x = date, y = incidence, fill = disease)) +
+  ggtitle("Monthly Incidences in Other Regions") +
   geom_area(position = "identity", alpha=.2, colour="black", size=.7) +
   ylim(0, 120) +
   guides(fill=FALSE)
 
 monthly_inc_diff <- monthly_inc_east %>%
   # calculate diff
-  left_join(monthly_inc_rest, by = c("date" = "date", "disease" = "disease")) %>%
+  left_join(monthly_inc_rest, 
+            by = c("date" = "date", "disease" = "disease")) %>%
   mutate(incidence = incidence.x - incidence.y) 
 
-p3 <- ggplot(data = monthly_inc_diff, aes(x = date, y = incidence, fill = disease), main = "Difference between Monthly Incidences") +
+p3 <- ggplot(data = monthly_inc_diff, 
+             aes(x = date, y = incidence, fill = disease)) +
+  ggtitle("Difference between Monthly Incidences") +
   geom_area(position = "identity", alpha=.2, colour="black", size=.7) +
   ylim(-15, 70) +
   theme(legend.position = "bottom")
@@ -1163,9 +1342,12 @@ grid.arrange(p1, p2, p3)
 remove(monthly_inc, monthly_inc_rest, monthly_inc_east, monthly_inc_diff)
 ```
 
-The upper plots show incidences in the east and the rest, the lower plot the difference between them. Region East has higher incidences for all diseases in almost every single month. Are doctors there more eager to report or is this caused by the age structure?
+The upper plots show incidences in the east and the rest, the lower plot the
+difference between them. Region East has higher incidences for all diseases in
+almost every single month. Are doctors there more eager to report or is this
+caused by the age structure?
 
-```{r echo=FALSE, fig.width=10, fig.height=3, cache=TRUE, Bivariate_Plots7}
+```{r echo=FALSE, fig.width=10, fig.height=4, cache=TRUE, message=FALSE, Bivariate_Plots7}
 
 pop_east_rest <- population %>%
   filter(year == 2014) %>%
@@ -1177,7 +1359,9 @@ pop_east_rest <- population %>%
   mutate(rel_diff = (e - rest) * 200 / (e+rest)) %>%
   gather(region, pop_prop, e, rest)
 
-ggplot(pop_east_rest, aes(x = age, size = pop_prop, y = region, colour=rel_diff)) +
+ggplot(pop_east_rest, 
+       aes(x = age, size = pop_prop, y = region, colour=rel_diff)) +
+  ggtitle("Age Structure") +
   geom_point(stat = "identity", alpha=0.9) +
   scale_colour_gradientn(colours = diverge_hcl(12)) +
   scale_size_continuous(range=c(0.1, 10)) +
@@ -1185,25 +1369,13 @@ ggplot(pop_east_rest, aes(x = age, size = pop_prop, y = region, colour=rel_diff)
 
 ```
 
-The size of the dots shows what proportion the different ages have within the east and the rest, while color indicates how big the difference between the regions is. The East has relatively fewer people around 20, and more people 60+. The difference in small kids is relatively low, though, and I should not forget that I am comparing incidences as cases per 100,000 already. 
+The size of the dots shows what proportion the different ages have within the
+east and the rest, while color indicates how big the difference between the
+regions is. The East has relatively fewer people around 20, and more people 60+.
+The difference in small kids is relatively low, though, and I should not forget
+that I am comparing incidences as cases per 100,000 already.
 
-# Bivariate Analysis
-
-### Talk about some of the relationships you observed in this part of the investigation. How did the feature(s) of interest vary with other features in the dataset?
-
-I saw that there are seasonal patterns in the incidences of some diseases. The incidence is also influenced by the age of the patient. One region, East, has higher incidences in general.
-
-In a side exploration with incidence from another source it became clear that the aspect of reporting behavior is important, but beyond the scope of the data set.
-
-### Did you observe any interesting relationships between the other features (not the main feature(s) of interest)?
-
-The age structure of the East and the rest of Germany is different, the consequence of which is hopefully going to be explained in the next section. 
-
-### What was the strongest relationship you found?
-
-I think the time of the year has the strongest influence on incidence, but I am not sure if I can quantify that. 
-
-# Multivariate Plots Section
+### 3.1.5 Disease Incidences vs. Age and Region
 
 ```{r echo=FALSE, fig.width=10, fig.height=10, cache=TRUE, Multivariate_Plots}
 
@@ -1244,20 +1416,31 @@ inc_by_age_reg_dis <- cases %>%
   filter(rel_diff == top_reg) %>%
   dplyr::select( - top_reg) 
   
-ggplot(inc_by_age_reg_dis, aes(x = age, size = rel_diff, y = disease, colour=region)) +
-  geom_point(stat = "identity", position = position_jitter(width=0.3, height=1.1), alpha = 0.25) +
+ggplot(inc_by_age_reg_dis, 
+       aes(x = age, size = rel_diff, y = disease, colour=region)) +
+  geom_point(stat = "identity", 
+             position = position_jitter(width=0.3, height=1.1), alpha = 0.25) +
   scale_colour_manual(values = rainbow_hcl(4)) +
-  scale_size_area(max_size = 7)
+  scale_size_area(max_size = 6)
   
 remove(inc_by_age_reg_dis)
 
 ```
 
-The plot shows the relative difference of incidences (in percent, size of dots) for the diseases and various ages. There is one dot in the color of the region with the highest deviation from the mean for every year from 2001 to 2015. 
+The plot shows the relative difference of incidences (in percent, size of dots)
+for the diseases and various ages. There is one dot in the color of the region
+with the highest deviation from the mean for every year from 2001 to 2015.
 
-For rotavirus, there is a rather big deviation for all ages and years in region East. For almost all diseases, region East deviates most for people under 18. Historically, there was a much more centralised healthcare in the East, which might still influence the tendency of doctors to report cases. There are more patterns in the plot, for which I do not have a potential explanation.
+For rotavirus, there is a rather big deviation for all ages and years in region
+East. For almost all diseases, region East deviates most for people under 18.
+Historically, there was a much more centralised healthcare in the East, which
+might still influence the tendency of doctors to report cases. There are more
+patterns in the plot, for which I do not have a potential explanation.
 
-After the exploration of age/ region/ disease is exhausted, I will have a look at the seasonality again. 
+### 3.1.6 Seasonality of Disease Incidences vs. Time
+
+After the exploration of age/ region/ disease is exhausted, I will have a look
+at the seasonality again.
 
 ```{r echo=FALSE, fig.width=10, fig.height=8, cache=TRUE, Multivariate_Plots2}
 
@@ -1296,7 +1479,9 @@ grid.arrange(p1, p2, p3, p4, p5)
 remove(p1, p2, p3, p4, p5)
 ```
 
-The seasonality, which showed in the plot of the annual means above, is still there, but there are some changes over time. When I forecast noro- or rotavirus later, I will limit the data to years from 2008: 
+The seasonality, which showed in the plot of the annual means above, is still
+there, but there are some changes over time. When I forecast noro- or rotavirus
+later, I will limit the data to years from 2008:
 
 ```{r echo=FALSE, fig.width=10, fig.height=4, cache=TRUE, Multivariate_Plots2a}
 
@@ -1304,7 +1489,8 @@ plcpt <- function(disease) {
   # Plots the changepoints (by mean) for a disease
   incts <- ts(inc_by_dis[inc_by_dis$disease == disease, ]$incidence, 
             frequency = 50, start = 2001)
-  autoplot(cpt.mean(incts), cpt.linetype = 'solid')
+  autoplot(cpt.mean(incts), cpt.linetype = 'solid',
+          main = paste("Changepoints by Mean", disease, sep=": "))
 }
 
 plcpt("noro")
@@ -1312,7 +1498,10 @@ plcpt("salm")
 remove(inc_by_dis)
 ```
 
-Norovirus has high incidences in small kids and older people. Maybe the seasonality varies with age for norovirus.
+Norovirus has high incidences in small kids and older people. Maybe the
+seasonality varies with age for norovirus.
+
+### 3.1.7 Selected Incidence Seasonality vs. Age and Time
 
 ```{r echo=FALSE, fig.width=10, fig.height=10, cache=TRUE, Multivariate_Plots3}
 
@@ -1339,7 +1528,7 @@ pl <- function (age, disease) {
   ggplot(data, aes(x = year, y = week, fill=incidence)) +
     geom_raster() +
     scale_fill_gradientn(colours = heat_hcl(30)) +
-    ggtitle(paste(disease, age, sep=":"))
+    ggtitle(paste(disease, ": age ", age, sep=""))
 }
 
 pld <- function (disease) {
@@ -1366,14 +1555,20 @@ pld("noro")
 What is the pattern for campylobacter?
 
 ```{r echo=FALSE, fig.width=10, fig.height=10, cache=TRUE, Multivariate_Plots3a}
+
 pld("camp")
 
 remove(inc_norocamp_age_dis)
 ```
 
-While the seasonal pattern is similar within the age groups (columns), it looks different between the groups for norovirus. I will consider that in the final version of the seasonality plot.
+While the seasonal pattern is similar within the age groups (columns), it looks
+different between the groups for norovirus. I will consider that in the final
+version of the seasonality plot.
 
-Before I try a forecast, I have a look at the seasonality of some diseases by ages and regions:
+### 3.1.8 Selected Incidence Seasonality vs. Age and Region
+
+Before I try a forecast, I have a look at the seasonality of some diseases by
+ages and regions:
 
 ```{r echo=FALSE, fig.width=10, fig.height=5, cache=TRUE, Multivariate_Plots4}
 
@@ -1384,7 +1579,8 @@ inc_by_age_wk_dis <- cases %>%
   dplyr::select( - date) %>%
   # only years from 2008
   filter(year > 2007) %>%
-  left_join(annual_region_pop, by = c("pop_year" = "year", "region" = "region")) %>%
+  left_join(annual_region_pop, 
+            by = c("pop_year" = "year", "region" = "region")) %>%
   # mean over years
   dplyr::select( - pop_year) %>%
   group_by(week, region, disease, age) %>%
@@ -1396,19 +1592,22 @@ inc_by_age_wk_dis <- cases %>%
   dplyr::select(age, week, disease, region, incidence)
 
 pl <- function (region, disease, transform) {
-  # Plots incidence of one region and disease with a trasformation of incidence.
+  # Plots incidence of one region and 
+  # disease with a trasformation of incidence.
   # Necessary because faceting cannot scale the fill freely.
   data <- inc_by_age_wk_dis[inc_by_age_wk_dis$disease == disease &
                               inc_by_age_wk_dis$region == region, ]
   FUN <- get(transform, envir = baseenv())
-  ggplot(data, aes(x = age, y = week, fill=FUN(incidence), z = FUN(incidence))) +
+  ggplot(data, 
+         aes(x = age, y = week, fill=FUN(incidence), z = FUN(incidence))) +
     geom_raster() +
     scale_fill_gradientn(colours = heat_hcl(30)) +
-    ggtitle(paste(transform, paste(disease, region, sep=":"), sep=":")) 
+    ggtitle(paste(transform, " of ", disease, ": region ", region, sep="")) 
 }
 
 plr <- function (disease, transform) {
-  # Plots incidence of all regions for one disease with a trasformation of incidence.
+  # Plots incidence of all regions for one 
+  # disease with a trasformation of incidence.
   # Necessary because faceting cannot scale the fill freely.
   p1 <- pl("n", disease, transform)
   p2 <- pl("e", disease, transform)
@@ -1424,11 +1623,16 @@ plr("camp", "identity")
 remove(inc_by_age_wk_dis)
 ```
 
-There is no real difference between the regions. The diseases seem to hit all ages at once within the season.
+There is no real difference between the regions. The diseases seem to hit all
+ages at once within the season.
 
-With the new insights I try to forecast some incidences again:
+### 3.1.9 Forecasting Revisited
 
-```{r echo=FALSE, fig.width=10, fig.height=4, cache=TRUE, Multivariate_Plots5}
+With the new insights I try to forecast some incidences again. I limit to data
+from 2008 on, and predict seperately for three age groups (*y*oung, *m*iddle
+aged, and *o*lder).
+
+```{r echo=FALSE, fig.width=10, fig.height=4, cache=TRUE, message=FALSE, Multivariate_Plots5}
 
 weekly_inc_by_dis_ag <- cases %>%
   filter(disease %in% c("noro", "rota", "camp", "salm", "infl")) %>%
@@ -1469,7 +1673,8 @@ remove(weekly_inc_by_dis_ag)
 
 tb <- function (disease) {
   # Plots forecast for a disease
-  fit <- tbats(ts(weekly_inc_dis_ag_to13[ , disease], frequency = 50, start = 2008), 
+  fit <- tbats(ts(weekly_inc_dis_ag_to13[ , disease], 
+                  frequency = 50, start = 2008), 
               num.cores=NULL)
   fc <- forecast(fit, h=100, level=c(50))
   fitres <- fortify(fit$errors)   
@@ -1479,7 +1684,8 @@ tb <- function (disease) {
            predict.size = .75, ts.size = .75, 
            predict.colour = "black", predict.linetype = 5, 
            main = disease) + 
-    scale_x_continuous(breaks = c(2008, 2010, 2012, 2014, 2016, 2018, 2020)) +
+    scale_x_continuous(breaks = 
+                         c(2008, 2010, 2012, 2014, 2016, 2018, 2020)) +
     geom_line(data = fitres, aes(x = Index, y = Data), size = 0.1) +
     geom_line(data = actual, aes(x = Index, y = Data), size = 0.5, 
               colour = "red") 
@@ -1496,25 +1702,75 @@ tb("y_rota")
 
 ```
 
-The thick black and the thin red line are the actual incidence of a disease and age group. The dashed line is the forecast with a .5 confidence interval. The thin black line shows the residuals of the model.
+The thick black and the thin red line are the actual incidence of a disease and
+age group. The dashed line is the forecast with a .5 confidence interval. The
+thin black line shows the residuals of the model.
 
-I would not have expected the forecasts to be that good. 
+I would not have expected the forecasts to be that good.
 
 I think I have enough insight now to prepare the final plots.
 
-# Multivariate Analysis
+## 3.2 Analysis
+
+### What is the structure of your dataset?
+
+The dataset consists of two parts. To compute the incidences on my own, I
+downloaded the population data of the German states from
+https://www-genesis.destatis.de/genesis/online/link/tabellen/12411-0011 . There
+are limitations on the size of data you can obtain for free, so it is only
+biennial. Initially, this first part of the data contained 736 obs. of 18
+variables, but I reduced it to 648 obs. of 6 variables by summing values for
+regions and ages 80+.
+
+The second part contains 2,283,228 observations of 7 variables. For 778 weeks I
+have the case counts of nine not very rare infectious diseases, which are
+related to gastrointestinal symptoms, for patients grouped by age and region of
+Germany. Two redundant columns for the week of the year and the year to match
+with the population data have been included. The size of this dataset is
+approximately 80 MB.
+
+### Did you create any new variables from existing variables in the dataset?
+
+The incidence was calculated, often per plot, to ensure the right case and
+population counts are matched against each other.
+
+### Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? If so, why did you do this?
+
+To give an example, the age was included in the form "6 year olds" or "over 90
+year olds" in the population data. I had to extract the numeric value and,
+because the disease data grouped everyone over 80 together, had to sum all ages
+above 80. Additionally, I had to sum the values for the various states of
+Germany to obtain population numbers for the regions.
+
+In terms of unusual distributions, when I look at the quarterly incidences,
+there is a spike in EHEC diseases and E.Coli drops to 0 in 2015.
 
 ### Talk about some of the relationships you observed in this part of the investigation. Were there features that strengthened each other in terms of looking at your feature(s) of interest?
 
-In this part I could confirm and refine the insights from previous sections. Season of the year and age are the major factors when predicting the disease of a patient with gastrointestinal symptoms. I could not find an explanation for the generally higher incidences in the East.  
+Season of the year and age are the major factors when predicting the disease of
+a patient with gastrointestinal symptoms. I could not find an explanation for
+the generally higher incidences of one region, the East.
+
+In a side exploration with incidence from another source it became clear that
+the aspect of reporting behavior is important, but beyond the scope of the data
+set.
+
+### What was the strongest relationship you found?
+
+I think the time of the year has the strongest influence on incidence, but I am
+not sure if I can quantify that.
 
 ### Were there any interesting or surprising interactions between features?
 
-I could not find a relationship between age and season or region and season for the diseases. I decided to limit further exploration to years from 2008 on, because of a change in incidences I had not noticed before.
+I could not find a relationship between age and season or region and season for
+the diseases. I decided to limit further exploration to years from 2008 on,
+because of a change in incidences I had not noticed before.
 
 ### Did you create any models with your dataset? Discuss the strengths and limitations of your model.
 
-I forecasted incidences for some diseases and age groups, which were surprisingly accurate. Nevertheless, the forecast is based on the assumption of continuity, which limits the ability to foresee unusual events. 
+I forecasted incidences for some diseases and age groups, which were
+surprisingly accurate. Nevertheless, the forecast is based on the assumption of
+continuity, which limits the ability to foresee unusual events.
 
 ------
 
@@ -1552,14 +1808,15 @@ mean_inc_by_age_dis <- cases %>%
   ungroup()
 
 ggplot(mean_inc_by_age_dis, 
-       aes(x = age, size = incidence, y = disease, colour=disease)) +
+       aes(x = age, size = sqrt(incidence), y = disease, colour=disease)) +
   geom_point(stat = "identity", alpha=0.7) +
   scale_colour_manual(values = rainbow_hcl(5), guide = "none") +
-  scale_size_area(max_size = 6) +
+  scale_size_area(max_size = 4) +
   scale_y_discrete(limits = c("infl", "noro", "rota", "camp", "salm"),
                    labels = c("influenza", "norovirus", "rotavirus", 
                               "campylobacter", "salmonella")) +
-  labs(x = "Age", y = "Disease", size = "Incidence", title = "Incidence vs. Age" ) +
+  labs(x = "Age", y = "Disease", size = "Sqrt(Incidence)", 
+       title = "Gastrointestinal Disease Incidence vs. Age" ) +
   scale_x_continuous(breaks = seq(0, 80, 5), 
                      labels = c(seq(0, 79, 5), "80+" ))
 
@@ -1567,7 +1824,13 @@ ggplot(mean_inc_by_age_dis,
 
 ### Description One
 
-The plot shows the mean annual incidence of the top five diseases for the age of the patient. The gastro-intestinal symptoms of a middle-aged patient are more likely to be caused by campylobacter than rotavirus. 
+The plot shows the mean annual incidence of the top five diseases for the age of
+the patient. The gastro-intestinal symptoms of a middle-aged patient are more
+likely to be caused by campylobacter than rotavirus.
+
+I chose this plot, because it allows to put a main finding of my exploration to
+use in an intuitive way. For my initial question, which disease a patient is
+most likely to have, this plot allows an easy lookup by comparing dot sizes.
 
 ### Plot Two
 
@@ -1602,7 +1865,8 @@ ggplot(weekly_inc_by_dis, aes(x = week, y = incidence, fill = disease)) +
                     breaks = c("noro", "rota", "camp", "salm"),
                     labels = c("norovirus", "rotavirus", 
                               "campylobacter", "salmonella")) +
-  labs(x = "Week of the Year", y = "Incidence", fill = "Disease", title = "Incidence vs. Season" ) + 
+  labs(x = "Week of the Year", y = "Incidence", fill = "Disease", 
+       title = "Incidence vs. Season" ) + 
   theme(legend.position = "bottom", legend.box = "horizontal", 
         strip.text.x = element_text(size = 12))
 
@@ -1610,7 +1874,14 @@ ggplot(weekly_inc_by_dis, aes(x = week, y = incidence, fill = disease)) +
 
 ### Description Two
 
-These three plots show the incidence of four diseases during the course of the year for different age groups. The symptoms of a middle-aged patient are more likely to be caused by norovirus in winter and campylobacter in summer.
+These three plots show the incidence of four diseases during the course of the
+year for different age groups. The symptoms of a middle-aged patient are more
+likely to be caused by norovirus in winter and campylobacter in summer.
+
+I chose this plot, because on the one hand it illustrates the finding that the 
+season of the year is a major influence on disease incidence. On the other hand 
+it refines the insight that age has an important impact, too, and reminds
+looking in the calender is not sufficient.
 
 ### Plot Three
 
@@ -1618,7 +1889,8 @@ These three plots show the incidence of four diseases during the course of the y
 
 tb <- function (disease, title) {
   # Plots forecast for a disease
-  fit <- tbats(ts(weekly_inc_dis_ag_to13[ , disease], frequency = 50, start = 2008), 
+  fit <- tbats(ts(weekly_inc_dis_ag_to13[ , disease], 
+                  frequency = 50, start = 2008), 
               num.cores=NULL)
   fc <- forecast(fit, h=150, level=c(50))
   fitres <- fortify(fit$errors)   
@@ -1640,18 +1912,41 @@ tb("o_noro", "Incidence vs. Time: Norovirus 75+ years")
 
 ### Description Three
 
-The two plots above show forecasts for the incidence of norovirus for two age groups. The actual incidence (red line) stays mostly within a 50%-confidence interval (grey ribbon) of the forecast. 
+The two plots above show forecasts for the incidence of norovirus for two age
+groups. The actual incidence (red line) stays mostly within a 50%-confidence
+interval (grey ribbon) of the forecast.
+
+I chose this plot, because it shows that if age and seasonality are respected, a
+quite accurate prediction is possible.
 
 ------
 
 # Reflection
 
-I had to start over twice before I could choose a good selection of data from the source. When I analyzed single variables age and season of the year emerged as major factors.
+I had to start over twice before I was able to choose a good selection of data 
+from the source. Contrary to my initial belief, I had to calculate the incidence
+on my own, using a supplementary dataset of population data. I had not expected
+that the variable time could be so versatile. It also contains the season and
+various degrees of granularity, of course.
 
-I could not explain higher incidences in region East when I explored the relationships between two variables. Further, when contrasting with data from another source it became clear that the way how the data is gathered by the Robert Koch Institute limits how well it describes the reality.
+The libraries which I found most useful for analyzing time series are 
+`lubridate` for date conversions, `forecast` for modelling, `changepoint`, and 
+`ggfortify` for plotting. 
 
-My multivariate analysis confirmed and refined earlier findings. I identified changepoints in the data which helped to limitmy data to relevant years. I could not find a relationship between age and season or region and season,  but I was able to forecast some diseases rather accurately. 
+During my analysis variables age and season of the year emerged as major
+factors. I could not explain higher incidences in region East. Further, when
+contrasting with data from another source it became clear that the way how the
+data is gathered by the Robert Koch Institute limits how well it describes the
+reality.
 
-The libraries which I found most useful for analyzing time series are lubridate, forecast, changepoint, and ggfortify. If I was able to access the data source without having to download separate sheets manually I could try to get insights from finer geographical information.
+Later in my exploration, I identified changepoints in the data which helped to 
+limit my data to relevant years. I could not find a relationship between age and
+season or region and season, but I was able to forecast some diseases rather 
+accurately.
 
-
+If I were able to access the data source without having to download separate 
+sheets manually I could try to get insights from finer geographical information.
+Data on county level could be plotted on a map of Germany and the change of
+incidences over the year could be animated. It would be interesting to see if
+there are pockets where some diseases stay all year or if they spread from
+airports to the countryside.
